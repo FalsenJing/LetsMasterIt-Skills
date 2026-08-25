@@ -6,7 +6,7 @@
 
 ## 📅 阶段学习进度表
 
-<!-- 下方 PHASE_TABLE 为 scripts/build.ps1 (或 build.py) 的插入锚点，请勿删除 -->
+<!-- 下方 PHASE_TABLE 为 scripts/build.ps1的插入锚点，请勿删除 -->
 <!-- PHASE_TABLE -->
 
 ---

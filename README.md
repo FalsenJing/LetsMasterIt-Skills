@@ -9,7 +9,7 @@
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](#)
 
 <p align="center">
-  <b>自主可控材料</b> • <b>两段式用户审批</b> • <b>三段式上下文隔离</b> • <b>严谨理论推导</b>
+  <b>材料可选</b> • <b>两段式审批</b> • <b>三段式上下文隔离</b> • <b>严谨理论推导</b>
 </p>
 
 </div>
@@ -31,6 +31,8 @@
 
 </details>
 
+---
+### [👉点击跳转至`lmi-outline-skill`大纲生成与原始材料还原度对比](./compare_asset/高等数学/compare.md)
 ## Let's Master It 技能的定位
 当你知道一个”学习目标“，但是不知道从何学起时，它会构建一套完整的学习路线，该路线以严格的公理体系为依据。
 

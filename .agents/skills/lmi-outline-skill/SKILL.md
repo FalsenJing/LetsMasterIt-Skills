@@ -22,6 +22,7 @@ description: "指导生成学习大纲 study_plan.md（含进度 checkbox、错�
 1. **必须以权威国际教科书为依据**生成大纲，偏好学术教材（如 Sheldon Axler《Linear Algebra Done Right》、Gilbert Strang《Introduction to Linear Algebra》等），**而非**备考书籍。
 2. **显式标注来源**：在 `study_plan.md` 文件开头必须标注主要参考教材的完整书名和作者。
 3. **用户指定优先**：若用户指定了特定教材，以用户指定的为准。
+4. 如果用户指定了[x出版社]的[《x教材》]，则100%依据教材的大纲内容生成**完全相同**的`study_plan.md`，如果无法通过网络搜索到现成的该教材大纲内容，则报告给用户。
 
 ### 二、大纲结构规范
 
