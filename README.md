@@ -66,10 +66,10 @@
 > 复制以下内容发送给你当前的 AI agent：
 > ```text
 > 请帮我安装并配置来自 GitHub 的 LMI 教学技能包：
-> 1. 访问/克隆仓库：https://github.com/JingFalsen/Let-s-Master-It-skills
+> 1. 访问/克隆仓库：https://github.com/FalsenJing/LetsMasterIt-Skills.git
 > 2. 将该仓库中的 `.agents/skills/` 目录完整复制到我当前项目的 `.agents/skills/` 路径下。
 > 3. 将仓库根目录下的 `GEMINI.md` 下载并放置到我当前项目的根目录下（作为全局意图路由）。
-> 4. 完成后提示我安装成功，并告诉我如何开始使用。
+> 4. 完成后提示我安装成功，并告诉用户“开启新窗口进行学习“。
 > ```
 
 
