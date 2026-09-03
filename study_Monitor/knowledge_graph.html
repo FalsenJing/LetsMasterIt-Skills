@@ -1,0 +1,1876 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>知识图谱 · 学习导航</title>
+  <script src="vis-network.min.js"></script>
+  <script>
+    if (typeof vis === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.9/standalone/umd/vis-network.min.js"><\/script>');
+    }
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                   "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+      background: #f0f2f5;
+      color: #262626;
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    /* ========== Toolbar ========== */
+    #toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      padding: 0 20px;
+      background: #fff;
+      border-bottom: 1px solid #e8e8e8;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+      z-index: 10;
+      position: relative;
+    }
+    .toolbar-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .toolbar-left h1 { font-size: 18px; font-weight: 600; color: #1a1a1a; }
+    #subject-name {
+      font-size: 13px; color: #8c8c8c;
+      padding: 2px 10px; background: #f5f5f5; border-radius: 4px;
+    }
+    .toolbar-center {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .view-tabs {
+      display: flex;
+      gap: 4px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 3px;
+    }
+    .tab-btn {
+      padding: 5px 16px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: #8c8c8c;
+      font-weight: 500;
+    }
+    .tab-btn.active {
+      background: #fff;
+      color: #1890ff;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .tab-btn:hover:not(.active) { color: #595959; }
+
+    /* Layout switcher */
+    .layout-controls {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 3px;
+    }
+    .layout-label {
+      font-size: 12px;
+      color: #8c8c8c;
+      margin: 0 4px;
+    }
+    .layout-btn {
+      padding: 4px 10px;
+      border: none;
+      border-radius: 5px;
+      background: transparent;
+      font-size: 12px;
+      cursor: pointer;
+      color: #8c8c8c;
+      transition: all 0.2s;
+      font-weight: 500;
+    }
+    .layout-btn.active {
+      background: #fff;
+      color: #1890ff;
+      font-weight: 600;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    }
+    .layout-btn:hover:not(.active) { color: #595959; }
+    .btn-sm {
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    /* Legend */
+    .legend { display: flex; gap: 14px; font-size: 12px; color: #595959; }
+    .legend-item { display: flex; align-items: center; gap: 5px; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    .dot.center-hub { background: #2f54eb; }
+    .dot.completed { background: #52c41a; }
+    .dot.available { background: #1890ff; }
+    .dot.locked    { background: #d9d9d9; }
+    .dot.selected-study { background: #faad14; }
+
+    /* Buttons */
+    .btn {
+      padding: 6px 14px; border: 1px solid #d9d9d9; border-radius: 6px;
+      background: #fff; font-size: 13px; cursor: pointer;
+      transition: all 0.2s; color: #595959;
+    }
+    .btn:hover { border-color: #1890ff; color: #1890ff; }
+    .btn-primary { background: #1890ff; color: #fff; border-color: #1890ff; }
+    .btn-primary:hover { background: #40a9ff; }
+    .btn-primary:disabled { background: #d9d9d9; border-color: #d9d9d9; cursor: not-allowed; }
+    .btn-success { background: #52c41a; color: #fff; border-color: #52c41a; }
+    .btn-success:hover { background: #73d13d; }
+    .btn-warning { background: #fff; color: #faad14; border-color: #faad14; }
+    .btn-warning:hover { background: #fffbe6; }
+
+    /* Save indicator */
+    #save-indicator {
+      font-size: 12px; color: #52c41a; opacity: 0; transition: opacity 0.3s;
+    }
+    #save-indicator.show { opacity: 1; }
+
+    /* ========== Main layout ========== */
+    #main { display: flex; height: calc(100vh - 56px); }
+
+    /* ========== Graph view ========== */
+    #graph-view { display: flex; flex: 1; }
+    #graph-container { flex: 1; background: #fafafa; position: relative; }
+
+    /* ========== Detail panel ========== */
+    #detail-panel {
+      width: 380px; background: #fff;
+      border-left: 1px solid #e8e8e8; overflow-y: auto;
+    }
+    #panel-placeholder {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      height: 100%; color: #bfbfbf; font-size: 14px;
+    }
+    #panel-placeholder .icon { font-size: 48px; margin-bottom: 12px; }
+    #panel-content { padding: 24px; }
+
+    .panel-header {
+      margin-bottom: 20px; padding-bottom: 16px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .panel-node-id { font-size: 12px; color: #8c8c8c; margin-bottom: 4px; }
+    .panel-node-label { font-size: 20px; font-weight: 600; color: #1a1a1a; margin-bottom: 8px; }
+    .panel-module { font-size: 12px; color: #8c8c8c; }
+
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 12px;
+      font-size: 12px; font-weight: 500; margin-top: 10px;
+    }
+    .status-badge.completed { background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
+    .status-badge.available { background: #e6f7ff; color: #096dd9; border: 1px solid #91d5ff; }
+    .status-badge.locked    { background: #f5f5f5; color: #8c8c8c; border: 1px solid #d9d9d9; }
+
+    .panel-section { margin-bottom: 20px; }
+    .panel-section-title {
+      font-size: 13px; font-weight: 600; color: #595959;
+      margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+    }
+
+    .prereq-list { list-style: none; font-size: 13px; }
+    .prereq-list li {
+      padding: 7px 12px; margin-bottom: 6px; border-radius: 6px;
+      display: flex; align-items: center; gap: 8px;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .prereq-list li:hover { filter: brightness(0.96); transform: translateX(2px); }
+    .prereq-list li.done { background: #f6ffed; color: #389e0d; border: 1px solid #b7eb8f; }
+    .prereq-list li.pending { background: #fff7e6; color: #d48806; border: 1px solid #ffe58f; }
+
+    /* Concept tags */
+    .concept-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .concept-tag {
+      padding: 2px 10px; border-radius: 10px;
+      font-size: 12px; font-weight: 500;
+    }
+    .concept-tag.teaches { background: #e6fffb; color: #13c2c2; border: 1px solid #87e8de; }
+    .concept-tag.requires { background: #fff1f0; color: #cf1322; border: 1px solid #ffa39e; }
+
+    .blackbox-table {
+      width: 100%; border-collapse: collapse; font-size: 13px;
+    }
+    .blackbox-table th {
+      text-align: left; padding: 8px 10px; background: #fafafa;
+      color: #8c8c8c; font-weight: 500; border-bottom: 1px solid #f0f0f0;
+    }
+    .blackbox-table td {
+      padding: 8px 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top;
+    }
+    .blackbox-table .term-name { font-weight: 600; color: #fa8c16; white-space: nowrap; }
+    .blackbox-table .term-target { color: #1890ff; cursor: pointer; font-size: 12px; }
+    .blackbox-table .term-target:hover { text-decoration: underline; }
+
+    .panel-actions {
+      display: flex; flex-direction: column; gap: 10px;
+      margin-top: 24px; padding-top: 20px; border-top: 1px solid #f0f0f0;
+    }
+    .panel-actions .btn { text-align: center; padding: 10px; font-size: 14px; }
+
+    .empty-hint { color: #bfbfbf; font-size: 12px; font-style: italic; }
+
+    /* Edge reason tooltip */
+    .edge-reason {
+      font-size: 12px; color: #8c8c8c; margin-top: 4px;
+      padding: 4px 8px; background: #fafafa; border-radius: 4px;
+    }
+
+    /* ========== Achievement wall view ========== */
+    #achievement-view {
+      display: none;
+      flex: 1;
+      height: calc(100vh - 56px);
+      overflow: hidden;
+      background: #f8fafc;
+    }
+
+    .achievement-main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 36px 40px;
+      background: linear-gradient(135deg, #667eea08 0%, #764ba208 100%);
+    }
+
+    .achievement-sidebar {
+      width: 440px;
+      background: #ffffff;
+      border-left: 1px solid #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      box-shadow: -2px 0 8px rgba(0,0,0,0.03);
+      z-index: 5;
+    }
+
+    /* Textbook sidebar elements */
+    .tb-sidebar-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #e8e8e8;
+      background: #fafafa;
+    }
+    .tb-header-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .tb-book-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e293b;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 290px;
+    }
+    .tb-book-meta {
+      font-size: 12px;
+      color: #64748b;
+      margin-bottom: 12px;
+    }
+    .tb-progress-container { margin-top: 8px; }
+    .tb-progress-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #475569;
+      margin-bottom: 4px;
+    }
+    .tb-progress-bar {
+      height: 6px;
+      background: #e2e8f0;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .tb-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #10b981, #06b6d4);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    .tb-tree-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+    }
+    .tb-chapter-card {
+      margin-bottom: 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+    .tb-chapter-card:hover {
+      border-color: #cbd5e1;
+    }
+    .tb-chapter-header {
+      padding: 10px 14px;
+      background: #f8fafc;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+      font-size: 13px;
+      font-weight: 600;
+      color: #334155;
+    }
+    .tb-chapter-header:hover { background: #f1f5f9; }
+    .tb-ch-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #e2e8f0;
+      color: #475569;
+      font-weight: 500;
+    }
+    .tb-ch-badge.all-done {
+      background: #dcfce7;
+      color: #15803d;
+    }
+    .tb-section-list {
+      list-style: none;
+      padding: 6px 12px 10px;
+    }
+    .tb-section-item {
+      padding: 8px 10px;
+      margin-top: 4px;
+      border-radius: 6px;
+      background: #ffffff;
+      border: 1px solid #f1f5f9;
+      transition: all 0.15s;
+      cursor: pointer;
+    }
+    .tb-section-item:hover {
+      background: #f8fafc;
+      border-color: #cbd5e1;
+    }
+    .tb-sec-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 500;
+      color: #1e293b;
+    }
+    .tb-sec-status {
+      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .tb-sec-status.mastered { color: #16a34a; font-weight: 600; }
+    .tb-sec-status.partial { color: #d97706; font-weight: 500; }
+    .tb-sec-status.unstarted { color: #94a3b8; }
+    .tb-sec-concepts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 6px;
+    }
+    .tb-sec-concept-pill {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: #f1f5f9;
+      color: #64748b;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+    .tb-sec-concept-pill.done {
+      background: #dcfce7;
+      color: #15803d;
+      border: 1px solid #bbf7d0;
+    }
+    .tb-sec-concept-pill.pending {
+      background: #f8fafc;
+      color: #94a3b8;
+      border: 1px dashed #cbd5e1;
+    }
+    .tb-empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #94a3b8;
+    }
+    .tb-empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+
+    .achievement-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .achievement-header h2 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1a1a1a;
+      margin-bottom: 8px;
+    }
+    .achievement-header .progress-text {
+      font-size: 16px;
+      color: #8c8c8c;
+    }
+    .achievement-header .progress-text strong {
+      color: #52c41a;
+      font-size: 24px;
+    }
+
+    /* Progress bar */
+    .achievement-progress-bar {
+      width: 300px;
+      height: 8px;
+      background: #f0f0f0;
+      border-radius: 4px;
+      margin: 16px auto 0;
+      overflow: hidden;
+    }
+    .achievement-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #52c41a, #13c2c2);
+      border-radius: 4px;
+      transition: width 0.6s ease;
+    }
+
+    /* Module group */
+    .achievement-module {
+      margin-bottom: 36px;
+    }
+    .achievement-module-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: #595959;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid #f0f0f0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .module-progress {
+      font-size: 12px;
+      color: #8c8c8c;
+      font-weight: 400;
+    }
+
+    /* Achievement cards grid */
+    .achievement-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    /* Individual achievement card */
+    .achievement-card {
+      width: 140px;
+      padding: 20px 14px;
+      background: #fff;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      border: 2px solid #b7eb8f;
+      cursor: default;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      /* Each card gets a random rotation via inline style --rot */
+      transform: rotate(var(--rot, 0deg));
+    }
+    .achievement-card:hover {
+      animation: wobble 0.5s ease;
+      box-shadow: 0 6px 20px rgba(82, 196, 26, 0.2);
+      z-index: 2;
+    }
+
+    @keyframes wobble {
+      0%   { transform: rotate(var(--rot, 0deg)) scale(1); }
+      15%  { transform: rotate(calc(var(--rot, 0deg) + 5deg)) scale(1.05); }
+      30%  { transform: rotate(calc(var(--rot, 0deg) - 4deg)) scale(1.06); }
+      45%  { transform: rotate(calc(var(--rot, 0deg) + 3deg)) scale(1.04); }
+      60%  { transform: rotate(calc(var(--rot, 0deg) - 2deg)) scale(1.03); }
+      75%  { transform: rotate(calc(var(--rot, 0deg) + 1deg)) scale(1.02); }
+      100% { transform: rotate(var(--rot, 0deg)) scale(1); }
+    }
+
+    .achievement-card .card-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+    }
+    .achievement-card .card-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #389e0d;
+      margin-bottom: 6px;
+    }
+    .achievement-card .card-aliases {
+      font-size: 11px;
+      color: #8c8c8c;
+      line-height: 1.4;
+    }
+    .achievement-card .card-from {
+      font-size: 11px;
+      color: #b7eb8f;
+      margin-top: 8px;
+    }
+
+    /* Empty achievement state */
+    .achievement-empty {
+      text-align: center;
+      padding: 80px 0;
+      color: #bfbfbf;
+    }
+    .achievement-empty .icon { font-size: 64px; margin-bottom: 16px; }
+    .achievement-empty p { font-size: 16px; }
+
+    /* ========== Welcome overlay ========== */
+    #welcome {
+      position: fixed; inset: 0; background: #f0f2f5;
+      display: flex; align-items: center; justify-content: center; z-index: 100;
+    }
+    .welcome-card {
+      background: #fff; padding: 48px 56px; border-radius: 12px;
+      text-align: center; box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    .welcome-card h2 { font-size: 24px; margin-bottom: 8px; color: #1a1a1a; }
+    .welcome-card p { color: #8c8c8c; margin-bottom: 28px; font-size: 14px; }
+    .welcome-card .btn { font-size: 15px; padding: 10px 28px; }
+    .welcome-card .hint { margin-top: 20px; font-size: 12px; color: #bfbfbf; }
+
+    /* vis.js tooltip override */
+    .vis-tooltip {
+      font-family: inherit !important; font-size: 12px !important;
+      background: #fff !important; border: 1px solid #e8e8e8 !important;
+      border-radius: 6px !important; padding: 8px 12px !important;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important; max-width: 280px !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========== Welcome overlay ========== -->
+  <div id="welcome">
+    <div class="welcome-card">
+      <h2>📊 知识图谱 · 学习导航</h2>
+      <p>加载 <code>knowledge_graph.json</code> 文件以开始</p>
+      <button class="btn btn-primary" onclick="loadFile()">📂 打开文件</button>
+      <p class="hint">支持 Chrome / Edge 浏览器，使用 File System Access API 实现本地读写</p>
+    </div>
+  </div>
+
+  <!-- ========== Main app ========== -->
+  <div id="app" style="display:none;">
+    <div id="toolbar">
+      <div class="toolbar-left">
+        <h1>📊 知识图谱</h1>
+        <span id="subject-name"></span>
+      </div>
+      <div class="toolbar-center">
+        <div class="view-tabs">
+          <button class="tab-btn active" onclick="switchView('graph')">🗺️ 图谱</button>
+          <button class="tab-btn" onclick="switchView('achievement')">🏆 成就墙</button>
+        </div>
+        <div class="layout-controls" id="layout-controls">
+          <span class="layout-label">布局:</span>
+          <button class="layout-btn active" id="btn-radial" onclick="changeLayout('radial')" title="以中心节点为枢纽按圆散开">🎯 环形散开</button>
+          <button class="layout-btn" id="btn-force" onclick="changeLayout('force')" title="基于引力与斥力的自由发散">🪐 引力发散</button>
+          <button class="layout-btn" id="btn-hierarchical" onclick="changeLayout('hierarchical')" title="左右从前置到后置分层流向">🌲 分层流向</button>
+          <button class="btn btn-sm" onclick="fitView()" title="重置视角以完整显示图谱">🔍 居中</button>
+        </div>
+      </div>
+      <div class="toolbar-right">
+        <div class="legend" id="graph-legend">
+          <span class="legend-item"><span class="dot center-hub"></span>体系中枢</span>
+          <span class="legend-item"><span class="dot completed"></span>已完成</span>
+          <span class="legend-item"><span class="dot available"></span>可学习</span>
+          <span class="legend-item"><span class="dot locked"></span>锁定</span>
+          <span class="legend-item"><span class="dot selected-study"></span>已选择</span>
+        </div>
+        <button class="btn" onclick="loadFile()">📂 重新加载</button>
+        <span id="save-indicator">✓ 已保存</span>
+      </div>
+    </div>
+    <div id="main">
+      <!-- Graph view -->
+      <div id="graph-view">
+        <div id="graph-container"></div>
+        <div id="detail-panel">
+          <div id="panel-placeholder">
+            <div class="icon">👈</div>
+            <p>点击节点查看详情</p>
+          </div>
+          <div id="panel-content" style="display:none;"></div>
+        </div>
+      </div>
+
+      <!-- Achievement wall view -->
+      <div id="achievement-view">
+        <div class="achievement-main" id="achievement-main"></div>
+        <div class="achievement-sidebar" id="textbook-sidebar"></div>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="fileInput" accept=".json" style="display:none">
+  <input type="file" id="tbFileInput" accept=".json" style="display:none">
+
+<script>
+// ================================================================
+//  State
+// ================================================================
+let graphData = null;
+let fileHandle = null;
+let network = null;
+let visNodes = null;
+let visEdges = null;
+let currentView = 'graph';
+let textbookOutlineData = null;
+
+// ================================================================
+//  File I/O
+// ================================================================
+async function loadFile() {
+  if ('showOpenFilePicker' in window) {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{ description: 'JSON 文件', accept: { 'application/json': ['.json'] } }]
+      });
+      fileHandle = handle;
+      const file = await fileHandle.getFile();
+      const text = await file.text();
+      graphData = JSON.parse(text);
+      await onDataLoaded();
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.error('加载失败:', e);
+        alert('文件加载失败: ' + e.message);
+      }
+    }
+  } else {
+    document.getElementById('fileInput').click();
+  }
+}
+
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    graphData = JSON.parse(text);
+    await onDataLoaded();
+  } catch (e) { alert('文件解析失败: ' + e.message); }
+});
+
+// Textbook outline file picker
+async function loadTextbookOutlineFile() {
+  if ('showOpenFilePicker' in window) {
+    try {
+      const [handle] = await window.showOpenFilePicker({
+        types: [{ description: 'JSON 文件', accept: { 'application/json': ['.json'] } }]
+      });
+      const file = await handle.getFile();
+      const text = await file.text();
+      textbookOutlineData = JSON.parse(text);
+      try { localStorage.setItem('cached_textbook_outline', text); } catch(e){}
+      renderTextbookSidebar();
+    } catch(e) {
+      if (e.name !== 'AbortError') alert('加载教材大纲失败: ' + e.message);
+    }
+  } else {
+    document.getElementById('tbFileInput').click();
+  }
+}
+
+document.getElementById('tbFileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const text = await file.text();
+    textbookOutlineData = JSON.parse(text);
+    try { localStorage.setItem('cached_textbook_outline', text); } catch(e){}
+    renderTextbookSidebar();
+  } catch (e) { alert('教材大纲解析失败: ' + e.message); }
+});
+
+async function tryAutoLoadTextbookOutline() {
+  try {
+    const cached = localStorage.getItem('cached_textbook_outline');
+    if (cached) {
+      textbookOutlineData = JSON.parse(cached);
+      return;
+    }
+  } catch(e) {}
+
+  try {
+    const res = await fetch('textbook_outline.json');
+    if (res.ok) {
+      textbookOutlineData = await res.json();
+      return;
+    }
+  } catch(e) {}
+
+  try {
+    const res2 = await fetch('../textbook_outline.json');
+    if (res2.ok) {
+      textbookOutlineData = await res2.json();
+      return;
+    }
+  } catch(e) {}
+}
+
+async function saveToFile() {
+  if (!graphData) return;
+  graphData.meta.last_updated = new Date().toISOString();
+  const json = JSON.stringify(graphData, null, 2);
+  if (fileHandle) {
+    try {
+      const writable = await fileHandle.createWritable();
+      await writable.write(json);
+      await writable.close();
+      showSaveIndicator();
+    } catch (e) { console.error('保存失败:', e); }
+  } else {
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'knowledge_graph.json'; a.click();
+    URL.revokeObjectURL(url);
+    showSaveIndicator();
+  }
+}
+
+function showSaveIndicator() {
+  const el = document.getElementById('save-indicator');
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1500);
+}
+
+// ================================================================
+//  Data loaded
+// ================================================================
+async function onDataLoaded() {
+  computeStatuses();
+  syncConceptMastery();
+  document.getElementById('welcome').style.display = 'none';
+  document.getElementById('app').style.display = '';
+  document.getElementById('subject-name').textContent = graphData.meta.subject || '';
+  await tryAutoLoadTextbookOutline();
+  renderGraph();
+  renderAchievementWall();
+  hideNodeDetail();
+}
+
+// ================================================================
+//  View switching
+// ================================================================
+function switchView(view) {
+  currentView = view;
+  const tabs = document.querySelectorAll('.tab-btn');
+  tabs.forEach(t => t.classList.remove('active'));
+
+  const layoutControls = document.getElementById('layout-controls');
+
+  if (view === 'graph') {
+    tabs[0].classList.add('active');
+    document.getElementById('graph-view').style.display = 'flex';
+    document.getElementById('achievement-view').style.display = 'none';
+    document.getElementById('graph-legend').style.display = 'flex';
+    if (layoutControls) layoutControls.style.display = 'inline-flex';
+    // Re-fit graph when switching back
+    if (network) {
+      setTimeout(() => network.fit({ animation: { duration: 300 } }), 100);
+    }
+  } else {
+    tabs[1].classList.add('active');
+    document.getElementById('graph-view').style.display = 'none';
+    document.getElementById('achievement-view').style.display = 'flex';
+    document.getElementById('graph-legend').style.display = 'none';
+    if (layoutControls) layoutControls.style.display = 'none';
+    renderAchievementWall();
+  }
+}
+
+// ================================================================
+//  Concept mastery sync: node completion → concept mastered
+// ================================================================
+function syncConceptMastery() {
+  if (!graphData.concept_dictionary) return;
+  const nodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
+
+  graphData.concept_dictionary.forEach(concept => {
+    const node = nodeMap.get(concept.taught_by);
+    concept.mastered = node ? node.status === 'completed' : false;
+  });
+}
+
+// ================================================================
+//  Graph logic: compute statuses
+// ================================================================
+function computeStatuses() {
+  const nodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
+  // Build prereq map from edges
+  const prereqs = {};
+  graphData.edges.filter(e => e.type === 'prerequisite').forEach(e => {
+    if (!prereqs[e.to]) prereqs[e.to] = [];
+    if (!prereqs[e.to].includes(e.from)) prereqs[e.to].push(e.from);
+  });
+
+  graphData.nodes.forEach(node => {
+    if (node.status === 'completed') return;
+    const deps = prereqs[node.id] || [];
+    const allDone = deps.every(depId => {
+      const dep = nodeMap.get(depId);
+      return dep && dep.status === 'completed';
+    });
+    node.status = allDone ? 'available' : 'locked';
+  });
+}
+
+function getPrerequisiteNodes(nodeId) {
+  return graphData.edges
+    .filter(e => e.type === 'prerequisite' && e.to === nodeId)
+    .map(e => {
+      const node = graphData.nodes.find(n => n.id === e.from);
+      const edge = e;
+      return node ? { ...node, _edge: edge } : null;
+    })
+    .filter(Boolean);
+}
+
+function getDependentNodes(nodeId) {
+  return graphData.edges
+    .filter(e => e.type === 'prerequisite' && e.from === nodeId)
+    .map(e => graphData.nodes.find(n => n.id === e.to))
+    .filter(Boolean);
+}
+
+function getConceptName(conceptId) {
+  if (!graphData.concept_dictionary) return conceptId;
+  const c = graphData.concept_dictionary.find(c => c.id === conceptId);
+  return c ? c.canonical : conceptId;
+}
+
+// ================================================================
+//  Rendering: vis.js graph
+// ================================================================
+const STATUS_COLORS = {
+  completed: {
+    background: '#52c41a', border: '#389e0d', fontColor: '#fff',
+    highlight: { background: '#73d13d', border: '#237804' },
+    hover: { background: '#73d13d', border: '#389e0d' }
+  },
+  available: {
+    background: '#1890ff', border: '#096dd9', fontColor: '#fff',
+    highlight: { background: '#40a9ff', border: '#0050b3' },
+    hover: { background: '#40a9ff', border: '#096dd9' }
+  },
+  locked: {
+    background: '#f0f0f0', border: '#d9d9d9', fontColor: '#8c8c8c',
+    highlight: { background: '#e8e8e8', border: '#bfbfbf' },
+    hover: { background: '#e8e8e8', border: '#bfbfbf' }
+  }
+};
+
+let currentLayout = 'radial';
+const CENTER_NODE_ID = '__subject_root__';
+
+// ================================================================
+//  Radial coordinate calculation: concentric & module rays
+// ================================================================
+function computeRadialPositions(nodes, edges) {
+  const modules = [...new Set(nodes.map(n => n.module || '未分组'))];
+  const M = modules.length;
+  const positions = new Map();
+
+  const R_base = 450;
+  const staggerAmt = M > 6 ? 140 : 0;
+  const R_step = 200;
+
+  modules.forEach((modName, m) => {
+    const modNodes = nodes.filter(n => (n.module || '未分组') === modName);
+    const K = modNodes.length;
+    // Base angle starting from 12 o'clock (-Math.PI/2) and moving clockwise
+    const baseAngle = -Math.PI / 2 + (2 * Math.PI * m / M);
+    const stagger = (m % 2) * staggerAmt;
+    const fanWidth = K > 1 ? (Math.PI / (M * 2.5)) : 0;
+
+    modNodes.forEach((node, k) => {
+      const r = R_base + stagger + k * R_step;
+      const fanOffset = K > 1 ? (k - (K - 1) / 2) * (fanWidth / (K - 1)) : 0;
+      const angle = baseAngle + fanOffset;
+
+      positions.set(node.id, {
+        x: Math.round(r * Math.cos(angle) * 10) / 10,
+        y: Math.round(r * Math.sin(angle) * 10) / 10
+      });
+    });
+  });
+
+  return positions;
+}
+
+function createCenterNode() {
+  const subject = (graphData && graphData.meta && graphData.meta.subject) ? graphData.meta.subject : '知识体系';
+  return {
+    id: CENTER_NODE_ID,
+    label: '📚 ' + subject + '\n[体系核心中枢]',
+    x: 0,
+    y: 0,
+    fixed: { x: true, y: true },
+    shape: 'box',
+    shapeProperties: { borderRadius: 16 },
+    color: {
+      background: '#2f54eb',
+      border: '#1d39c4',
+      highlight: { background: '#597ef7', border: '#10239e' },
+      hover: { background: '#597ef7', border: '#10239e' }
+    },
+    font: {
+      color: '#ffffff',
+      size: 15,
+      face: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif'
+    },
+    margin: { top: 16, bottom: 16, left: 24, right: 24 },
+    borderWidth: 3,
+    shadow: {
+      enabled: true,
+      color: 'rgba(47, 84, 235, 0.35)',
+      size: 16, x: 0, y: 3
+    },
+    opacity: 1.0,
+    title: '点击查看「' + subject + '」全景概况与统计'
+  };
+}
+
+function createCenterEdges(modules) {
+  const edges = [];
+  const moduleFirstNodes = modules.map(m => graphData.nodes.find(n => (n.module || '未分组') === m)).filter(Boolean);
+
+  moduleFirstNodes.forEach((node, idx) => {
+    edges.push({
+      id: 'center_edge_' + idx,
+      from: CENTER_NODE_ID,
+      to: node.id,
+      arrows: { to: { enabled: true, scaleFactor: 0.6 } },
+      color: {
+        color: '#adc6ff',
+        opacity: 0.45,
+        highlight: '#2f54eb',
+        hover: '#2f54eb'
+      },
+      dashes: [5, 5],
+      width: 1.5,
+      smooth: { type: 'continuous', roundness: 0.1 },
+      title: '主干延伸: ' + (node.module || node.label)
+    });
+  });
+
+  return edges;
+}
+
+function toVisNode(node, isRadial, positions) {
+  const sc = STATUS_COLORS[node.status] || STATUS_COLORS.locked;
+  const isSel = graphData.selected_node === node.id;
+  const pos = (isRadial && positions) ? positions.get(node.id) : null;
+  const item = {
+    id: node.id,
+    label: node.id + '\n' + node.label,
+    shape: 'box',
+    color: {
+      background: isSel ? '#fff7e6' : sc.background,
+      border: isSel ? '#faad14' : sc.border,
+      highlight: sc.highlight, hover: sc.hover
+    },
+    font: {
+      color: isSel ? '#d48806' : sc.fontColor, size: 14,
+      face: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif',
+      multi: 'html'
+    },
+    borderWidth: isSel ? 3 : 2,
+    margin: { top: 12, bottom: 12, left: 18, right: 18 },
+    shadow: {
+      enabled: true,
+      color: isSel ? 'rgba(250,173,20,0.25)' : 'rgba(0,0,0,0.08)',
+      size: isSel ? 12 : 6, x: 0, y: 2
+    },
+    opacity: 1.0,
+    shapeProperties: { borderRadius: 8 },
+    title: buildTooltip(node)
+  };
+  if (pos) {
+    item.x = pos.x;
+    item.y = pos.y;
+  }
+  return item;
+}
+
+function buildTooltip(node) {
+  const labels = { completed: '✅ 已完成', available: '🔵 可学习', locked: '🔒 锁定' };
+  let tip = labels[node.status] || node.status;
+  if (node.status === 'locked') {
+    const prereqs = getPrerequisiteNodes(node.id);
+    const unfinished = prereqs.filter(p => p.status !== 'completed');
+    if (unfinished.length > 0) {
+      tip += '\n需要先完成: ' + unfinished.map(p => p.id + ' ' + p.label).join(', ');
+    }
+  }
+  // Show teaches concepts
+  if (node.teaches && node.teaches.length > 0) {
+    tip += '\n教授概念: ' + node.teaches.map(getConceptName).join(', ');
+  }
+  return tip;
+}
+
+function toVisEdge(edge, index, isRadial) {
+  const isPre = edge.type === 'prerequisite';
+  return {
+    id: 'e' + index, from: edge.from, to: edge.to,
+    arrows: { to: { enabled: true, scaleFactor: 0.8 } },
+    color: {
+      color: isPre ? '#8c8c8c' : '#fa8c16', opacity: 0.6,
+      highlight: isPre ? '#595959' : '#d46b08',
+      hover: isPre ? '#595959' : '#d46b08'
+    },
+    dashes: isPre ? false : [8, 4],
+    width: isPre ? 2 : 1.5,
+    smooth: isRadial
+      ? { type: 'continuous', roundness: 0.15 }
+      : { type: 'cubicBezier', forceDirection: 'horizontal', roundness: 0.4 },
+    title: edge.reason || ''
+  };
+}
+
+function renderGraph() {
+  const container = document.getElementById('graph-container');
+  if (!container || !graphData) return;
+
+  const isRadial = currentLayout === 'radial';
+  const isForce = currentLayout === 'force';
+  const isHierarchical = currentLayout === 'hierarchical';
+
+  const modules = [...new Set(graphData.nodes.map(n => n.module || '未分组'))];
+  const radialPositions = (isRadial || isForce) ? computeRadialPositions(graphData.nodes, graphData.edges) : null;
+
+  const nodeList = graphData.nodes.map(n => toVisNode(n, isRadial || isForce, radialPositions));
+  let edgeList = graphData.edges.map((e, idx) => toVisEdge(e, idx, !isHierarchical));
+
+  if (isRadial || isForce) {
+    nodeList.unshift(createCenterNode());
+    const cEdges = createCenterEdges(modules);
+    edgeList = edgeList.concat(cEdges);
+  }
+
+  visNodes = new vis.DataSet(nodeList);
+  visEdges = new vis.DataSet(edgeList);
+  isChainHighlighted = false;
+
+  let options;
+  if (isHierarchical) {
+    options = {
+      layout: {
+        hierarchical: {
+          direction: 'LR', sortMethod: 'directed',
+          levelSeparation: 320, nodeSpacing: 140, treeSpacing: 180,
+          blockShifting: true, edgeMinimization: true, parentCentralization: true
+        }
+      },
+      physics: false,
+      interaction: {
+        hover: true, selectConnectedEdges: false,
+        tooltipDelay: 300, zoomView: true, dragView: true, dragNodes: true
+      }
+    };
+  } else if (isForce) {
+    options = {
+      layout: { hierarchical: false },
+      physics: {
+        enabled: true,
+        solver: 'forceAtlas2Based',
+        forceAtlas2Based: {
+          gravitationalConstant: -100,
+          centralGravity: 0.02,
+          springLength: 200,
+          springConstant: 0.05,
+          damping: 0.4,
+          avoidOverlap: 1
+        },
+        stabilization: {
+          enabled: true,
+          iterations: 150,
+          updateInterval: 25
+        }
+      },
+      interaction: {
+        hover: true, selectConnectedEdges: false,
+        tooltipDelay: 300, zoomView: true, dragView: true, dragNodes: true
+      }
+    };
+  } else {
+    // 🎯 环形放射 (Radial, 默认)
+    options = {
+      layout: { hierarchical: false },
+      physics: false,
+      interaction: {
+        hover: true, selectConnectedEdges: false,
+        tooltipDelay: 300, zoomView: true, dragView: true, dragNodes: true
+      }
+    };
+  }
+
+  if (network) network.destroy();
+  network = new vis.Network(container, { nodes: visNodes, edges: visEdges }, options);
+
+  network.on('click', (params) => {
+    if (params.nodes.length > 0) showNodeDetail(params.nodes[0]);
+    else hideNodeDetail();
+  });
+
+  if (isForce) {
+    network.once('stabilizationIterationsDone', () => {
+      network.setOptions({ physics: false });
+      network.fit({ animation: { duration: 500, easingFunction: 'easeOutQuad' } });
+    });
+  } else {
+    network.once('afterDrawing', () => {
+      network.fit({ animation: { duration: 500, easingFunction: 'easeOutQuad' } });
+    });
+  }
+}
+
+function refreshGraphNodes() {
+  if (!visNodes) return;
+  graphData.nodes.forEach(node => {
+    const updated = toVisNode(node, false, null);
+    visNodes.update(updated);
+  });
+}
+
+function changeLayout(mode) {
+  currentLayout = mode;
+  document.querySelectorAll('.layout-btn').forEach(b => b.classList.remove('active'));
+  const activeBtn = document.getElementById('btn-' + mode);
+  if (activeBtn) activeBtn.classList.add('active');
+  renderGraph();
+}
+
+function fitView() {
+  if (network) {
+    network.fit({ animation: { duration: 500, easingFunction: 'easeOutQuad' } });
+  }
+}
+
+// ================================================================
+//  Chain & Edge Highlighting (选中节点全链路高亮，非关联节点及连线淡化)
+// ================================================================
+let isChainHighlighted = false;
+
+function getDependencyChain(nodeId) {
+  const ancestors = new Set();
+  const descendants = new Set();
+
+  // Upstream: 逆向广度优先搜索寻找所有前置祖先节点 (e.to === curr -> e.from)
+  const upQueue = [nodeId];
+  while (upQueue.length > 0) {
+    const curr = upQueue.shift();
+    graphData.edges.forEach(e => {
+      if (e.type === 'prerequisite' && e.to === curr) {
+        if (!ancestors.has(e.from)) {
+          ancestors.add(e.from);
+          upQueue.push(e.from);
+        }
+      }
+    });
+  }
+
+  // Downstream: 正向广度优先搜索寻找所有后续派生节点 (e.from === curr -> e.to)
+  const downQueue = [nodeId];
+  while (downQueue.length > 0) {
+    const curr = downQueue.shift();
+    graphData.edges.forEach(e => {
+      if (e.type === 'prerequisite' && e.from === curr) {
+        if (!descendants.has(e.to)) {
+          descendants.add(e.to);
+          downQueue.push(e.to);
+        }
+      }
+    });
+  }
+
+  const chainNodes = new Set([nodeId, ...ancestors, ...descendants]);
+  return { ancestors, descendants, chainNodes };
+}
+
+function restoreAllNodes() {
+  if (!visNodes || !graphData) return;
+  const updates = graphData.nodes.map(n => toVisNode(n, false, null));
+  if (currentLayout === 'radial' || currentLayout === 'force') {
+    updates.push(createCenterNode());
+  }
+  visNodes.update(updates);
+}
+
+function restoreAllEdges() {
+  if (!visEdges || !graphData) return;
+  const isHierarchical = currentLayout === 'hierarchical';
+  const edgeUpdates = graphData.edges.map((e, idx) => toVisEdge(e, idx, !isHierarchical));
+  if (currentLayout === 'radial' || currentLayout === 'force') {
+    const modules = [...new Set(graphData.nodes.map(n => n.module || '未分组'))];
+    const cEdges = createCenterEdges(modules);
+    visEdges.update(edgeUpdates.concat(cEdges));
+  } else {
+    visEdges.update(edgeUpdates);
+  }
+}
+
+function clearChainHighlight() {
+  if (!isChainHighlighted) return;
+  isChainHighlighted = false;
+  restoreAllNodes();
+  restoreAllEdges();
+}
+
+function highlightChain(nodeId) {
+  if (!visNodes || !visEdges || !graphData || !nodeId || nodeId === CENTER_NODE_ID) {
+    clearChainHighlight();
+    return;
+  }
+
+  isChainHighlighted = true;
+  const { ancestors, descendants, chainNodes } = getDependencyChain(nodeId);
+
+  // 1. 更新节点显示：同一链路节点高亮保持，其他无连系节点透明度增加（大幅淡化）
+  const nodeUpdates = [];
+  graphData.nodes.forEach(node => {
+    if (chainNodes.has(node.id)) {
+      const normalItem = toVisNode(node, false, null);
+      if (node.id === nodeId) {
+        normalItem.borderWidth = 3.5;
+        normalItem.shadow = {
+          enabled: true,
+          color: 'rgba(24, 144, 255, 0.45)',
+          size: 14, x: 0, y: 2
+        };
+      }
+      normalItem.opacity = 1.0;
+      nodeUpdates.push(normalItem);
+    } else {
+      nodeUpdates.push({
+        id: node.id,
+        color: {
+          background: 'rgba(245, 247, 250, 0.2)',
+          border: 'rgba(217, 217, 217, 0.22)',
+          highlight: { background: 'rgba(245, 247, 250, 0.3)', border: 'rgba(217, 217, 217, 0.3)' },
+          hover: { background: 'rgba(245, 247, 250, 0.3)', border: 'rgba(217, 217, 217, 0.3)' }
+        },
+        font: {
+          color: 'rgba(160, 160, 160, 0.2)'
+        },
+        shadow: { enabled: false },
+        opacity: 0.16
+      });
+    }
+  });
+
+  // 淡化中心主节点
+  if (currentLayout === 'radial' || currentLayout === 'force') {
+    nodeUpdates.push({
+      id: CENTER_NODE_ID,
+      color: {
+        background: 'rgba(47, 84, 235, 0.1)',
+        border: 'rgba(29, 57, 196, 0.12)'
+      },
+      font: { color: 'rgba(255, 255, 255, 0.15)' },
+      shadow: { enabled: false },
+      opacity: 0.12
+    });
+  }
+  visNodes.update(nodeUpdates);
+
+  // 2. 更新连线显示：下游绿色实线，上游蓝色虚线，同链其他连线清晰，其他无连系连线淡化
+  const edgeUpdates = [];
+  graphData.edges.forEach((e, idx) => {
+    const edgeId = 'e' + idx;
+
+    // (A) 直属下游连线：绿色实线 (nodeId -> 后续节点)
+    if (e.from === nodeId) {
+      edgeUpdates.push({
+        id: edgeId,
+        color: {
+          color: '#52c41a',
+          highlight: '#389e0d',
+          hover: '#52c41a',
+          opacity: 1.0,
+          inherit: false
+        },
+        width: 3.5,
+        dashes: false
+      });
+    }
+    // (B) 直属上游连线：蓝色虚线 (前置节点 -> nodeId)
+    else if (e.to === nodeId) {
+      edgeUpdates.push({
+        id: edgeId,
+        color: {
+          color: '#1890ff',
+          highlight: '#096dd9',
+          hover: '#1890ff',
+          opacity: 1.0,
+          inherit: false
+        },
+        width: 2.8,
+        dashes: [6, 4]
+      });
+    }
+    // (C) 链上其他连线（祖先节点之间、后代节点之间）：清晰可见
+    else if (chainNodes.has(e.from) && chainNodes.has(e.to)) {
+      edgeUpdates.push({
+        id: edgeId,
+        color: {
+          color: '#8c8c8c',
+          highlight: '#595959',
+          hover: '#595959',
+          opacity: 0.75,
+          inherit: false
+        },
+        width: 2,
+        dashes: e.type === 'prerequisite' ? false : [8, 4]
+      });
+    }
+    // (D) 无连系的其他连线：透明度增加，大幅淡化视觉效果
+    else {
+      edgeUpdates.push({
+        id: edgeId,
+        color: {
+          color: '#bfbfbf',
+          opacity: 0.04,
+          highlight: '#bfbfbf',
+          hover: '#bfbfbf',
+          inherit: false
+        },
+        width: 1,
+        dashes: [4, 4]
+      });
+    }
+  });
+
+  // 淡化中心虚拟辐射连线
+  if (currentLayout === 'radial' || currentLayout === 'force') {
+    const modules = [...new Set(graphData.nodes.map(n => n.module || '未分组'))];
+    modules.forEach((m, idx) => {
+      edgeUpdates.push({
+        id: 'center_edge_' + idx,
+        color: { color: '#adc6ff', opacity: 0.03 },
+        width: 1
+      });
+    });
+  }
+
+  visEdges.update(edgeUpdates);
+}
+
+// ================================================================
+//  Detail panel
+// ================================================================
+function showNodeDetail(nodeId) {
+  if (nodeId === CENTER_NODE_ID) {
+    clearChainHighlight();
+    showSubjectRootDetail();
+    return;
+  }
+  highlightChain(nodeId);
+  const node = graphData.nodes.find(n => n.id === nodeId);
+  if (!node) return;
+
+  document.getElementById('panel-placeholder').style.display = 'none';
+  const content = document.getElementById('panel-content');
+  content.style.display = '';
+
+  const prereqs = getPrerequisiteNodes(nodeId);
+  const statusLabels = { completed: '已完成', available: '可学习', locked: '锁定' };
+  const statusIcons = { completed: '✅', available: '🔵', locked: '🔒' };
+  const isSel = graphData.selected_node === nodeId;
+
+  let html = '';
+
+  // Header
+  html += '<div class="panel-header">';
+  html += '<div class="panel-node-id">节点 ' + node.id + '</div>';
+  html += '<div class="panel-node-label">' + node.label + '</div>';
+  html += '<div class="panel-module">' + node.module + '</div>';
+  html += '<span class="status-badge ' + node.status + '">' + statusIcons[node.status] + ' ' + statusLabels[node.status] + '</span>';
+  if (isSel) html += ' <span class="status-badge" style="background:#fff7e6;color:#d48806;border:1px solid #ffe58f;">⭐ 已选择学习</span>';
+  html += '</div>';
+
+  // Teaches concepts
+  if (node.teaches && node.teaches.length > 0) {
+    html += '<div class="panel-section">';
+    html += '<div class="panel-section-title">🎓 本节教授的概念</div>';
+    html += '<div class="concept-tags">';
+    node.teaches.forEach(cid => {
+      html += '<span class="concept-tag teaches">' + getConceptName(cid) + '</span>';
+    });
+    html += '</div></div>';
+  }
+
+  // Requires concepts
+  if (node.requires && node.requires.length > 0) {
+    html += '<div class="panel-section">';
+    html += '<div class="panel-section-title">📋 前置概念依赖</div>';
+    html += '<div class="concept-tags">';
+    node.requires.forEach(cid => {
+      html += '<span class="concept-tag requires">' + getConceptName(cid) + '</span>';
+    });
+    html += '</div></div>';
+  }
+
+  // Prerequisites (nodes)
+  if (prereqs.length > 0) {
+    html += '<div class="panel-section">';
+    html += '<div class="panel-section-title">🔗 前置节点</div>';
+    html += '<ul class="prereq-list">';
+    prereqs.forEach(p => {
+      const done = p.status === 'completed';
+      html += '<li class="' + (done ? 'done' : 'pending') + '" onclick="focusNode(\'' + p.id + '\')" title="点击定位到前置节点 ' + p.id + ' ' + p.label + '">';
+      html += '<span>' + (done ? '✅' : '⏳') + ' <strong>' + p.id + '</strong> ' + p.label + '</span>';
+      html += '</li>';
+    });
+    html += '</ul></div>';
+  }
+
+  // Blackbox terms
+  if (node.blackbox_terms && node.blackbox_terms.length > 0) {
+    html += '<div class="panel-section">';
+    html += '<div class="panel-section-title">📦 黑盒术语（本节提及但暂不展开）</div>';
+    html += '<table class="blackbox-table"><thead><tr><th>术语</th><th>作用</th><th>详见</th></tr></thead><tbody>';
+    node.blackbox_terms.forEach(bt => {
+      html += '<tr>';
+      html += '<td class="term-name">' + bt.term + '</td>';
+      html += '<td>' + bt.purpose + '</td>';
+      html += bt.target_node
+        ? '<td class="term-target" onclick="focusNode(\'' + bt.target_node + '\')">' + bt.target_node + '</td>'
+        : '<td><span class="empty-hint">超纲</span></td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+  }
+
+  // Actions
+  html += '<div class="panel-actions">';
+  if (node.status === 'completed')
+    html += '<button class="btn btn-warning" onclick="toggleComplete(\'' + node.id + '\')">↩️ 标记为未完成</button>';
+  else if (node.status === 'available')
+    html += '<button class="btn btn-success" onclick="toggleComplete(\'' + node.id + '\')">✅ 标记为已完成</button>';
+  else
+    html += '<button class="btn" disabled>🔒 前置节点未完成</button>';
+
+  if (node.status !== 'locked') {
+    html += isSel
+      ? '<button class="btn" onclick="deselectForStudy()">取消选择</button>'
+      : '<button class="btn btn-primary" onclick="selectForStudy(\'' + node.id + '\')">⭐ 选择学习此节点</button>';
+  }
+  html += '</div>';
+
+  content.innerHTML = html;
+}
+
+function hideNodeDetail() {
+  clearChainHighlight();
+  document.getElementById('panel-placeholder').style.display = '';
+  document.getElementById('panel-content').style.display = 'none';
+}
+
+function showSubjectRootDetail() {
+  document.getElementById('panel-placeholder').style.display = 'none';
+  const content = document.getElementById('panel-content');
+  content.style.display = '';
+
+  const subject = (graphData && graphData.meta && graphData.meta.subject) ? graphData.meta.subject : '知识体系';
+  const references = (graphData && graphData.meta && graphData.meta.references) ? [].concat(graphData.meta.references).join('、') : '权威教材';
+  const totalNodes = graphData.nodes.length;
+  const completedNodes = graphData.nodes.filter(n => n.status === 'completed').length;
+  const availableNodes = graphData.nodes.filter(n => n.status === 'available').length;
+  const lockedNodes = graphData.nodes.filter(n => n.status === 'locked').length;
+  const percent = totalNodes > 0 ? Math.round((completedNodes / totalNodes) * 100) : 0;
+
+  const modules = [...new Set(graphData.nodes.map(n => n.module || '未分组'))];
+
+  let html = '';
+  html += '<div class="panel-header">';
+  html += '<div class="panel-node-id">体系核心枢纽</div>';
+  html += '<div class="panel-node-label">📚 ' + subject + '</div>';
+  html += '<div class="panel-module">📖 ' + references + '</div>';
+  html += '<span class="status-badge" style="background:#f0f5ff;color:#2f54eb;border:1px solid #adc6ff;">🎯 核心中枢</span>';
+  html += '</div>';
+
+  // Overall Stats
+  html += '<div class="panel-section">';
+  html += '<div class="panel-section-title">📊 体系学习概况</div>';
+  html += '<div style="margin-bottom:8px;font-size:13px;color:#595959;display:flex;justify-content:space-between;">';
+  html += '<span>整体掌握度：' + percent + '%</span>';
+  html += '<span>' + completedNodes + ' / ' + totalNodes + ' 节点</span>';
+  html += '</div>';
+  html += '<div style="height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden;margin-bottom:14px;">';
+  html += '<div style="height:100%;width:' + percent + '%;background:linear-gradient(90deg,#52c41a,#1890ff);transition:width 0.3s;"></div>';
+  html += '</div>';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center;font-size:12px;">';
+  html += '<div style="background:#f6ffed;padding:8px;border-radius:6px;color:#389e0d;">✅ ' + completedNodes + '<br>已完成</div>';
+  html += '<div style="background:#e6f7ff;padding:8px;border-radius:6px;color:#096dd9;">🔵 ' + availableNodes + '<br>可学习</div>';
+  html += '<div style="background:#f5f5f5;padding:8px;border-radius:6px;color:#8c8c8c;">🔒 ' + lockedNodes + '<br>待解锁</div>';
+  html += '</div></div>';
+
+  // Modules list
+  html += '<div class="panel-section">';
+  html += '<div class="panel-section-title">📑 模块体系分布 (' + modules.length + ' 模块)</div>';
+  html += '<div style="max-height:220px;overflow-y:auto;padding-right:4px;">';
+  modules.forEach(m => {
+    const mNodes = graphData.nodes.filter(n => (n.module || '未分组') === m);
+    const mDone = mNodes.filter(n => n.status === 'completed').length;
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;margin-bottom:4px;background:#fafafa;border-radius:4px;font-size:12px;">';
+    html += '<span style="font-weight:500;color:#262626;">' + m + '</span>';
+    html += '<span style="color:' + (mDone === mNodes.length ? '#52c41a' : '#8c8c8c') + ';">' + mDone + ' / ' + mNodes.length + '</span>';
+    html += '</div>';
+  });
+  html += '</div></div>';
+
+  // Actions
+  html += '<div class="panel-actions">';
+  html += '<button class="btn btn-primary" onclick="fitView()">🎯 适应画布居中</button>';
+  html += '</div>';
+
+  content.innerHTML = html;
+}
+
+// ================================================================
+//  Achievement wall
+// ================================================================
+function renderAchievementWall() {
+  const container = document.getElementById('achievement-main') || document.getElementById('achievement-view');
+  if (!graphData || !graphData.concept_dictionary) {
+    if (container) container.innerHTML = '<div class="achievement-empty"><div class="icon">📦</div><p>暂无概念数据</p></div>';
+    renderTextbookSidebar();
+    return;
+  }
+
+  const concepts = graphData.concept_dictionary;
+  const mastered = concepts.filter(c => c.mastered);
+  const total = concepts.length;
+  const percent = total > 0 ? Math.round((mastered.length / total) * 100) : 0;
+
+  let html = '';
+
+  // Header
+  html += '<div class="achievement-header">';
+  html += '<h2>🏆 概念成就墙</h2>';
+  html += '<div class="progress-text">已掌握 <strong>' + mastered.length + '</strong> / ' + total + ' 个概念';
+  if (!textbookOutlineData) {
+    html += ' <button class="btn btn-sm" style="margin-left:14px;" onclick="loadTextbookOutlineFile()">📖 载入教材大纲</button>';
+  }
+  html += '</div>';
+  html += '<div class="achievement-progress-bar"><div class="achievement-progress-fill" style="width:' + percent + '%"></div></div>';
+  html += '</div>';
+
+  if (mastered.length === 0) {
+    html += '<div class="achievement-empty"><div class="icon">🌱</div><p>完成节点学习后，掌握的概念将在此展示</p></div>';
+    container.innerHTML = html;
+    renderTextbookSidebar();
+    return;
+  }
+
+  // Group mastered concepts by module (via taught_by node's module)
+  const nodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
+  const moduleGroups = {};
+
+  mastered.forEach(concept => {
+    const node = nodeMap.get(concept.taught_by);
+    const moduleName = node ? node.module : '未分类';
+    if (!moduleGroups[moduleName]) moduleGroups[moduleName] = [];
+    moduleGroups[moduleName].push(concept);
+  });
+
+  // Count total concepts per module for progress
+  const moduleTotals = {};
+  concepts.forEach(c => {
+    const node = nodeMap.get(c.taught_by);
+    const mod = node ? node.module : '未分类';
+    if (!moduleTotals[mod]) moduleTotals[mod] = 0;
+    moduleTotals[mod]++;
+  });
+
+  // Render each module group
+  for (const [moduleName, moduleConcepts] of Object.entries(moduleGroups)) {
+    const moduleTotal = moduleTotals[moduleName] || moduleConcepts.length;
+    html += '<div class="achievement-module">';
+    html += '<div class="achievement-module-title">' + moduleName;
+    html += '<span class="module-progress">' + moduleConcepts.length + ' / ' + moduleTotal + ' 已掌握</span>';
+    html += '</div>';
+    html += '<div class="achievement-grid">';
+
+    moduleConcepts.forEach(concept => {
+      // Random rotation between -4 and 4 degrees
+      const rot = (Math.random() * 8 - 4).toFixed(1);
+      html += '<div class="achievement-card" style="--rot:' + rot + 'deg">';
+      html += '<div class="card-icon">✨</div>';
+      html += '<div class="card-name">' + concept.canonical + '</div>';
+      if (concept.aliases && concept.aliases.length > 0) {
+        html += '<div class="card-aliases">' + concept.aliases.slice(0, 3).join(' · ') + '</div>';
+      }
+      html += '<div class="card-from">来自 ' + concept.taught_by + '</div>';
+      html += '</div>';
+    });
+
+    html += '</div></div>';
+  }
+
+  container.innerHTML = html;
+  renderTextbookSidebar();
+}
+
+function toggleChapterCollapse(idx) {
+  const body = document.getElementById('tb-ch-body-' + idx);
+  const arrow = document.getElementById('tb-ch-arrow-' + idx);
+  if (!body) return;
+  if (body.style.display === 'none') {
+    body.style.display = '';
+    if (arrow) arrow.style.transform = 'rotate(0deg)';
+  } else {
+    body.style.display = 'none';
+    if (arrow) arrow.style.transform = 'rotate(-90deg)';
+  }
+}
+
+function renderTextbookSidebar() {
+  const sidebar = document.getElementById('textbook-sidebar');
+  if (!sidebar) return;
+
+  if (!textbookOutlineData || !textbookOutlineData.chapters) {
+    sidebar.style.display = 'none';
+    return;
+  }
+  sidebar.style.display = 'flex';
+
+  const tb = textbookOutlineData;
+  const conceptDict = graphData ? (graphData.concept_dictionary || []) : [];
+  const conceptMap = new Map(conceptDict.map(c => [c.id, c]));
+  const nodeMap = new Map((graphData && graphData.nodes) ? graphData.nodes.map(n => [n.id, n]) : []);
+
+  let totalSections = 0;
+  let masteredSections = 0;
+
+  // First pass: compute mastery for each section and chapter
+  const chapterData = tb.chapters.map((ch, chIdx) => {
+    let chMastered = 0;
+    const secList = (ch.sections || []).map(sec => {
+      totalSections++;
+      const rawConcepts = Array.isArray(sec.concepts) ? sec.concepts : (typeof sec.concepts === 'string' ? [sec.concepts] : []);
+      const concepts = rawConcepts.map(cid => {
+        const c = conceptMap.get(cid);
+        return {
+          id: cid,
+          name: c ? c.canonical : cid,
+          mastered: c ? !!c.mastered : false
+        };
+      });
+
+      const matchedNode = nodeMap.get(sec.id);
+      const isNodeDone = matchedNode ? matchedNode.status === 'completed' : false;
+
+      let isSectionDone = false;
+      let isSectionPartial = false;
+
+      if (concepts.length > 0) {
+        const doneCount = concepts.filter(c => c.mastered).length;
+        if (doneCount === concepts.length || isNodeDone) {
+          isSectionDone = true;
+        } else if (doneCount > 0) {
+          isSectionPartial = true;
+        }
+      } else {
+        isSectionDone = isNodeDone;
+      }
+
+      if (isSectionDone) {
+        chMastered++;
+        masteredSections++;
+      }
+
+      return {
+        ...sec,
+        concepts,
+        isSectionDone,
+        isSectionPartial
+      };
+    });
+
+    return {
+      ...ch,
+      sections: secList,
+      masteredCount: chMastered,
+      totalCount: secList.length,
+      allDone: secList.length > 0 && chMastered === secList.length
+    };
+  });
+
+  const overallPercent = totalSections > 0 ? Math.round((masteredSections / totalSections) * 100) : 0;
+
+  let html = '';
+  html += '<div class="tb-sidebar-header">';
+  html += '  <div class="tb-header-top">';
+  html += '    <div class="tb-book-title" title="' + (tb.title || '') + '">📖 ' + (tb.title || '教材原版大纲') + '</div>';
+  html += '    <button class="btn btn-sm" onclick="loadTextbookOutlineFile()">📂 更换</button>';
+  html += '  </div>';
+  const metaInfo = [tb.author, tb.edition].filter(Boolean).join(' · ') || '二级章节大纲';
+  html += '  <div class="tb-book-meta">' + metaInfo + '</div>';
+  html += '  <div class="tb-progress-container">';
+  html += '    <div class="tb-progress-label">';
+  html += '      <span>整体大纲掌握度</span>';
+  html += '      <strong>' + masteredSections + ' / ' + totalSections + ' 节 (' + overallPercent + '%)</strong>';
+  html += '    </div>';
+  html += '    <div class="tb-progress-bar">';
+  html += '      <div class="tb-progress-fill" style="width:' + overallPercent + '%"></div>';
+  html += '    </div>';
+  html += '  </div>';
+  html += '</div>';
+
+  html += '<div class="tb-tree-scroll">';
+  chapterData.forEach((ch, chIdx) => {
+    const chBadgeClass = ch.allDone ? 'tb-ch-badge all-done' : 'tb-ch-badge';
+    html += '<div class="tb-chapter-card" id="tb-ch-card-' + chIdx + '">';
+    html += '  <div class="tb-chapter-header" onclick="toggleChapterCollapse(' + chIdx + ')">';
+    html += '    <div style="display:flex;align-items:center;gap:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px;">';
+    html += '      <span id="tb-ch-arrow-' + chIdx + '" style="font-size:10px;transition:transform 0.2s;">▼</span>';
+    html += '      <span>' + (ch.id ? ch.id + ' ' : '') + ch.title + '</span>';
+    html += '    </div>';
+    html += '    <span class="' + chBadgeClass + '">' + ch.masteredCount + '/' + ch.totalCount + '</span>';
+    html += '  </div>';
+
+    html += '  <ul class="tb-section-list" id="tb-ch-body-' + chIdx + '">';
+    ch.sections.forEach(sec => {
+      let statusHtml = '';
+      if (sec.isSectionDone) {
+        statusHtml = '<span class="tb-sec-status mastered">🟢 已掌握</span>';
+      } else if (sec.isSectionPartial) {
+        statusHtml = '<span class="tb-sec-status partial">🟡 学习中</span>';
+      } else {
+        statusHtml = '<span class="tb-sec-status unstarted">⚪ 待学习</span>';
+      }
+
+      html += '<li class="tb-section-item" onclick="focusNode(\'' + sec.id + '\')" title="点击定位到图谱节点 ' + sec.id + '">';
+      html += '  <div class="tb-sec-title-row">';
+      html += '    <span><strong>' + sec.id + '</strong> ' + sec.title + '</span>';
+      html += statusHtml;
+      html += '  </div>';
+
+      if (sec.concepts && sec.concepts.length > 0) {
+        html += '<div class="tb-sec-concepts">';
+        sec.concepts.forEach(c => {
+          const pillClass = c.mastered ? 'tb-sec-concept-pill done' : 'tb-sec-concept-pill pending';
+          const icon = c.mastered ? '✨' : '⚪';
+          html += '<span class="' + pillClass + '" title="概念: ' + c.name + (c.mastered ? ' (已掌握)' : ' (未掌握)') + '">' + icon + ' ' + c.name + '</span>';
+        });
+        html += '</div>';
+      }
+      html += '</li>';
+    });
+    html += '  </ul>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  sidebar.innerHTML = html;
+}
+
+// ================================================================
+//  Actions
+// ================================================================
+function toggleComplete(nodeId) {
+  const node = graphData.nodes.find(n => n.id === nodeId);
+  if (!node) return;
+
+  if (node.status === 'completed') {
+    const deps = getDependentNodes(nodeId);
+    const completedDeps = deps.filter(d => d.status === 'completed');
+    if (completedDeps.length > 0) {
+      const names = completedDeps.map(d => d.id + ' ' + d.label).join('\n  · ');
+      if (!confirm('以下后续节点已完成，取消本节点将使它们变为锁定状态:\n  · ' + names + '\n\n确定要继续吗？')) return;
+      cascadeUncomplete(nodeId);
+    }
+    node.status = 'available';
+  } else if (node.status === 'available') {
+    node.status = 'completed';
+  }
+
+  computeStatuses();
+  syncConceptMastery();
+  refreshGraphNodes();
+  showNodeDetail(nodeId);
+  renderAchievementWall();
+  saveToFile();
+}
+
+function cascadeUncomplete(nodeId) {
+  const node = graphData.nodes.find(n => n.id === nodeId);
+  if (!node || node.status !== 'completed') return;
+  node.status = 'available';
+  getDependentNodes(nodeId).forEach(dep => {
+    if (dep.status === 'completed') cascadeUncomplete(dep.id);
+  });
+}
+
+function selectForStudy(nodeId) {
+  graphData.selected_node = nodeId;
+  refreshGraphNodes();
+  showNodeDetail(nodeId);
+  saveToFile();
+}
+
+function deselectForStudy() {
+  const prev = graphData.selected_node;
+  graphData.selected_node = null;
+  refreshGraphNodes();
+  if (prev) showNodeDetail(prev);
+  saveToFile();
+}
+
+function focusNode(nodeId) {
+  if (nodeId === CENTER_NODE_ID) {
+    switchView('graph');
+    setTimeout(() => {
+      network.selectNodes([CENTER_NODE_ID]);
+      network.focus(CENTER_NODE_ID, { scale: 1.0, animation: { duration: 400, easingFunction: 'easeOutQuad' } });
+      showNodeDetail(CENTER_NODE_ID);
+    }, 150);
+    return;
+  }
+  if (!graphData.nodes.find(n => n.id === nodeId)) {
+    alert('节点 ' + nodeId + ' 不存在于当前图谱中');
+    return;
+  }
+  switchView('graph');
+  setTimeout(() => {
+    network.selectNodes([nodeId]);
+    network.focus(nodeId, { scale: 1.2, animation: { duration: 400, easingFunction: 'easeOutQuad' } });
+    showNodeDetail(nodeId);
+  }, 150);
+}
+</script>
+</body>
+</html>

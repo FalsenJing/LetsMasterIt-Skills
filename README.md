@@ -175,6 +175,8 @@ git clone https://github.com/FalsenJing/LetsMasterIt-Skills.git
 - [ ] 增加测试案例
 - [ ] 建立可验证标准化benchmark测试
 - [ ] 多语种适配（Multi-Language Support）
+- [ ] 添加web版可交互学习进度与学习路线展示与跟踪
+- [ ] 将树状大纲改为有向图模式，并用web端实现追踪更新 
 
 ## 📄 开源许可证 (License)
 

@@ -1,11 +1,11 @@
 ---
 name: lmi-execution-skill
-description: "以教学计划（teaching_plans/X.md）为唯一来源，进行教学讲解。讲解完成后更新 study_plan.md（进度、错题、疑难点）。"
+description: "以教学计划（teaching_plans/X.md）为唯一来源，进行教学讲解。讲解完成后更新 knowledge_graph.json（节点状态、概念掌握度、错题记录 error_log、疑难点记录 difficulty_log）。"
 ---
 
 # 教学实施技能 (Teaching Execution Skill)
 
-此技能以用户提供的教学计划为**唯一来源**，严格按照[核心职责]内的方法论进行教学讲解，并维护 `study_plan.md` 的进度、错题和疑难点记录。
+此技能以用户提供的教学计划为**唯一来源**，严格按照[核心职责]内的方法论进行教学讲解，并维护 `knowledge_graph.json` 的进度状态、概念掌握、错题记录（error_log）和疑难点记录（difficulty_log）。
 
 ---
 
@@ -74,23 +74,45 @@ description: "以教学计划（teaching_plans/X.md）为唯一来源，进行�
 
 ---
 
-## 📊 进度维护（维护 `study_plan.md`）
+## 📊 进度与档案维护（维护 `knowledge_graph.json`）
 
-### 进度更新
-讲解完成后，将对应节点的 checkbox 从 `- [ ]` 更新为 `- [x]`
+教学讲解与配套练习完成后，智能体必须读取并更新根目录下的 `knowledge_graph.json`：
 
-### 错题归档
-练习题回答错误时，追加到 `study_plan.md` 的 `❌ 错题档案记录` 表格：
-```
-| 错题ID | 关联章节 | 题目内容简述 | 错误原因分析 | 状态 |
-```
-状态标记为"待复习"，后续用户重做正确后可标记为"已掌握"。
+### 1. 进度与概念状态更新
+1. **节点状态变更**：在 `nodes` 数组中找到当前讲解节点，将其 `status` 从 `"available"` 更新为 `"completed"`。
+2. **概念掌握标记**：根据当前节点的 `teaches` 列表，在 `concept_dictionary` 中找到对应概念条目，将其 `mastered` 字段置为 `true`。
+3. **级联解锁后置节点**：检查依赖当前节点的所有后置节点（通过 `edges` 中以当前节点为 `from` 的边找到目标节点）。对于每个后置节点，若其全部前置节点状态均已为 `"completed"`，则将其 `status` 从 `"locked"` 解锁为 `"available"`。
+4. **元数据更新**：将 `meta.last_updated` 更新为当前时间（如 ISO 8601 格式）。
+5. **双轨成就联动**：由于 `textbook_outline.json` 中的各子章节通过概念标签与 `knowledge_graph.json` 的 `concept_dictionary` 及节点完成状态强绑定，更新概念掌握状态与节点状态将自动联动成就墙中该教材章节的实时掌握进度。
 
-### 疑难点追踪
-用户对某概念反复困惑时，追加到 `study_plan.md` 的 `💡 概念疑难点记录` 表格：
+### 2. 错题归档 (`error_log`)
+练习题回答错误时，向 `knowledge_graph.json` 的 `error_log` 数组追加记录：
+```json
+{
+  "id": "E001",
+  "node_id": "<当前节点ID>",
+  "question_summary": "<题目内容简述>",
+  "error_reason": "<错误原因分析>",
+  "status": "pending_review"
+}
 ```
-| 序号 | 章节 | 疑难点 | 解答要点 | 状态 |
+- `status` 初始标记为 `"pending_review"`（待复习）。
+- 后续用户重做正确后，可将其更新为 `"mastered"`（已掌握）。
+
+### 3. 疑难点追踪 (`difficulty_log`)
+用户对某概念反复困惑时，向 `knowledge_graph.json` 的 `difficulty_log` 数组追加记录：
+```json
+{
+  "id": "D001",
+  "node_id": "<当前节点ID>",
+  "concept_id": "<关联概念ID>",
+  "difficulty": "<疑难点描述>",
+  "key_resolution": "<解答要点>",
+  "status": "confused"
+}
 ```
+- `status` 初始标记为 `"confused"`（待巩固）。
+- 后续用户完全掌握突破后，可将其更新为 `"resolved"`（已突破）。
 
 ---
 
