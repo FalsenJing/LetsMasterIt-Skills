@@ -61,11 +61,9 @@ description: "指导生成知识图谱大纲 knowledge_graph.json（有向无环
      powershell -ExecutionPolicy Bypass -File .agents/skills/lmi-outline-skill/scripts/build_textbook_outline.ps1 -InputFile textbook_outline_raw.json -OutputFile textbook_outline.json
      ```
    - 校验成功生成规范的 `textbook_outline.json` 后，子代理自动清理临时 raw 文件，并向主代理发送完成消息。
-3. **主代理图谱完成后的汇合赋标（Join Point）**：
+3. **教材原版大纲概念赋标产出**：
    - 主代理完成知识图谱（`knowledge_graph.json`）与全局概念词典（`concept_dictionary`）的构建后，读取子代理产出的 `textbook_outline.json`。
-   - 主代理将 `concept_dictionary` 中的概念标签批量映射并赋标到大纲的每个二级子章节（`concepts: ["C001", "C002", ...]`），写回根目录。
-4. **成就墙树状边栏双轨追踪**：
-   - 在监控看板（`study_Monitor/knowledge_graph.html`）的成就墙右侧展示树状二级大纲边栏，通过 `knowledge_graph.json` 中对应的概念掌握度与节点状态动态联动，实时追踪呈现对该书籍各章、各节及全书的掌握进度。
+   - 将概念标签批量映射赋标到教材大纲的每个二级子章节（`concepts: ["C001", "C002", ...]`），规范输出 `knowledge_graphs/<学科名称>/textbook_outline.json`。
 
 ---
 
@@ -80,7 +78,7 @@ START:
     - [异步并发指派子代理收集教材大纲] 主代理调用 invoke_subagent，仅传入书籍名称与输出规范：
         - invoke_subagent(
             Role="教材大纲调研员", TypeName="research", Model="flash",
-            Prompt="书籍名称: 《<指定书籍或权威应试教材>》\n任务目标: 自行检索收集该教材原版两级目录大纲（严格约束为两级：章 -> 节，严禁包含第三级小节）。\n输出规范: 先写入 textbook_outline_raw.json，再执行 PowerShell 格式约束脚本输出 textbook_outline.json：\npowershell -ExecutionPolicy Bypass -File .agents/skills/lmi-outline-skill/scripts/build_textbook_outline.ps1 -InputFile textbook_outline_raw.json -OutputFile textbook_outline.json\n完成后清理 raw 临时文件并向主代理汇报完成。"
+            Prompt="书籍名称: 《<指定书籍或权威应试教材>》\n任务目标: 自行检索收集该教材原版两级目录大纲（严格约束为两级：章 -> 节，严禁包含第三级小节）。\n输出规范: 先写入 textbook_outline_raw.json，再执行 PowerShell 格式约束脚本输出到学科专属目录：\npowershell -ExecutionPolicy Bypass -File .agents/skills/lmi-outline-skill/scripts/build_textbook_outline.ps1 -InputFile textbook_outline_raw.json -OutputFile knowledge_graphs/<学科名称>/textbook_outline.json\n完成后清理 raw 临时文件并向主代理汇报完成。"
           )
     - [主代理不等待子代理，同时立即并发推进自身图谱任务] -> 进入 PHASE_1
 - ELSE:
@@ -134,15 +132,17 @@ PHASE_2 [阶段二: 概念归一化与词典构建]:
 
 PHASE_3 [阶段三: 自动连边、拓扑验算与图谱组装]:
 - WHILE (阶段三未通过):
-    - RUN `powershell -ExecutionPolicy Bypass -File .agents/skills/lmi-outline-skill/scripts/step3_build_graph.ps1 -InputFile step2_concepts.json -OutputFile knowledge_graph.json -Subject "<学科名称>"`
+    - RUN `powershell -ExecutionPolicy Bypass -File .agents/skills/lmi-outline-skill/scripts/step3_build_graph.ps1 -InputFile step2_concepts.json -OutputFile "knowledge_graphs/<学科名称>/knowledge_graph.json" -Subject "<学科名称>"`
     - response = PARSE_JSON(stdout)
     - IF (response.success == true):
-        - 图谱拓扑验证无误，确认生成 "knowledge_graph.json"
+        - 图谱拓扑验证无误，确认生成 "knowledge_graphs/<学科名称>/knowledge_graph.json"
+        - [活动学科指针规范创建]:
+          RUN `powershell -ExecutionPolicy Bypass -File .agents/skills/lmi-outline-skill/scripts/set_active_subject.ps1 -Subject "<学科名称>"`
         - RUN `powershell -ExecutionPolicy Bypass -Command "Remove-Item 'step1_nodes_raw.json', 'step1_nodes.json', 'step2_concepts_raw.json', 'step2_concepts.json' -ErrorAction SilentlyContinue"`
-        - IF (存在 "textbook_outline.json"):
-            - 主代理读取 "textbook_outline.json" 与 "knowledge_graph.json"
+        - IF (存在 "knowledge_graphs/<学科名称>/textbook_outline.json"):
+            - 主代理读取 "knowledge_graphs/<学科名称>/textbook_outline.json" 与 "knowledge_graphs/<学科名称>/knowledge_graph.json"
             - 主代理为每个二级子章节匹配赋标 concepts 概念标签
-            - 主代理写回带概念标签的 "textbook_outline.json"
+            - 主代理写回带概念标签的 "knowledge_graphs/<学科名称>/textbook_outline.json"
         - END IF
         - BREAK WHILE -> [进入 PHASE_4]
     - ELSE:
@@ -237,37 +237,37 @@ PHASE_4 执行阶段4[最终交付与强制审批]
 
 ## 🏁 [最终交付与强制审批]
 
-流水线全部自动执行完毕并生成 `knowledge_graph.json` 后，模型**必须执行以下动作**：
+流水线全部自动执行完毕并完成大纲与指针落盘后，模型**必须执行以下动作**：
 
 1. **呈现图谱核心指标摘要**（直接读取阶段三 JSON 的 `metrics`）：
-   - 关键学习路径长度及路径链路
-2. **指导用户在本地终端或资源管理器打开看板**：
-   - 提示用户在本地 PowerShell 终端中执行以下命令唤起 ·浏览器· 监控看板：
-     ```powershell
-     Start-Process "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe" -ArgumentList '"c:\A_LEARN\概率论与数理统计\study_Monitor\knowledge_graph.html"'
-     ```
-   - 同时提示用户直接在文件资源管理器中双击打开 `study_Monitor/knowledge_graph.html`。
+   - 节点数量、有向边数量、DAG 有向无环有效性
+   - 关键学习路径长度及链路顺序
+   - 并行度与图谱健康度评估
+2. **确认交付文件清单**：
+   - 核心知识图谱：`knowledge_graphs/<学科名称>/knowledge_graph.json`
+   - 教材目录大纲（若生成）：`knowledge_graphs/<学科名称>/textbook_outline.json`
+   - 活动学科指针：`knowledge_graphs/active_subject.json`
 3. **交互指引与后续审批**：
-   - 告知用户在打开的页面中点击「📂 打开文件」，选择根目录下的 `knowledge_graph.json` 即可交互审查图谱与成就墙。
-   - 提示：“知识图谱大纲已建立完成。若无需调整，建议开启新的会话窗口，调用 `lmi-plan-skill` 技能挑选节点制定具体教学计划。”
+   - 提示用户：“知识图谱大纲与活动追踪指针已成功建立。若无需调整，请确认审批通过；后续可调用 `lmi-plan-skill` 为具体知识节点制定教学计划。”
    - **停下调用工具，等待用户审批。**
 
 ---
 
-## 📁 模块与脚本清单
+## 📁 模块与目录清单
 
 ```
 工作区根目录/
-├── knowledge_graph.json                       ← 核心知识图谱数据文件
-├── textbook_outline.json                      ← 教材原版两级大纲（含主代理赋标的概念标签）
-├── study_Monitor/
-│   ├── knowledge_graph.html                   ← Web 可视化前端（图谱中心放射排布 + 成就墙教材大纲树状边栏）
-│   └── vis-network.min.js                     ← 本地离线网络绘图引擎库
+├── knowledge_graphs/                          ← 统一知识库大纲目录 (复数命名)
+│   ├── active_subject.json                    ← 活动学科指针文件
+│   └── <学科名称>/                            ← 学科子文件夹包 (支持中文，如：高等数学、线性代数)
+│       ├── knowledge_graph.json               ← 核心知识图谱数据文件
+│       └── textbook_outline.json              ← 教材原版两级大纲（含概念标签，可选）
 └── .agents/skills/lmi-outline-skill/
     ├── SKILL.md                              ← 本技能规范
     └── scripts/
         ├── step1_validate_nodes.ps1          ← 脚本一：节点与字段规范校验 (输出结构化 JSON)
         ├── step2_validate_concepts.ps1       ← 脚本二：概念归一化与引用校验 (输出结构化 JSON)
         ├── step3_build_graph.ps1             ← 脚本三：自动连边、拓扑验算与图谱组装 (输出结构化 JSON)
-        └── build_textbook_outline.ps1        ← 脚本四：教材二级章节格式约束校验与组装 (输出结构化 JSON)
+        ├── build_textbook_outline.ps1        ← 脚本四：教材二级章节格式约束校验与组装 (输出结构化 JSON)
+        └── set_active_subject.ps1            ← 脚本五：规范创建与更新活动学科指针 active_subject.json (输出结构化 JSON)
 ```

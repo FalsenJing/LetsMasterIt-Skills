@@ -76,7 +76,7 @@ description: "以教学计划（teaching_plans/X.md）为唯一来源，进行�
 
 ## 📊 进度与档案维护（维护 `knowledge_graph.json`）
 
-教学讲解与配套练习完成后，智能体必须读取并更新根目录下的 `knowledge_graph.json`：
+教学讲解与配套练习完成后，智能体必须读取并更新当前活动学科的知识图谱（读取 `knowledge_graphs/active_subject.json` 获取路径 `knowledge_graphs/<学科名称>/knowledge_graph.json`，若不存在指针文件则兼容回退根目录 `knowledge_graph.json`）：
 
 ### 1. 进度与概念状态更新
 1. **节点状态变更**：在 `nodes` 数组中找到当前讲解节点，将其 `status` 从 `"available"` 更新为 `"completed"`。

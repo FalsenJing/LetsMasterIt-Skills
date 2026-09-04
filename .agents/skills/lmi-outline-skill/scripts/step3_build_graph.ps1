@@ -234,8 +234,24 @@ $finalJsonObj = @{
 }
 
 $outFullPath = if ([System.IO.Path]::IsPathRooted($OutputFile)) { $OutputFile } else { Join-Path (Get-Location).Path $OutputFile }
+$outDir = [System.IO.Path]::GetDirectoryName($outFullPath)
+if ($outDir -and -not (Test-Path $outDir)) {
+    [System.IO.Directory]::CreateDirectory($outDir) | Out-Null
+}
 $finalJsonText = $finalJsonObj | ConvertTo-Json -Depth 8
 [System.IO.File]::WriteAllText($outFullPath, $finalJsonText, (New-Object System.Text.UTF8Encoding $true))
+
+# 同步更新活动学科指针 (active_subject.json)
+$kgDir = Split-Path $outDir -Parent
+if ($outDir -and (Test-Path $kgDir)) {
+    $pointerFile = Join-Path $kgDir "active_subject.json"
+    $pointerObj = @{
+        active_subject = $finalSubject
+        updated_at     = (Get-Date).ToString("yyyy-MM-ddTHH:mm:sszzz")
+    }
+    $pointerJson = $pointerObj | ConvertTo-Json -Depth 3
+    [System.IO.File]::WriteAllText($pointerFile, $pointerJson, (New-Object System.Text.UTF8Encoding $false))
+}
 
 # 标准 JSON 响应输出到 stdout
 $response = @{

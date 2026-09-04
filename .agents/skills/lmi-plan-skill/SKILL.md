@@ -1,11 +1,11 @@
 ---
 name: lmi-plan-skill
-description: "以 knowledge_graph.json 为唯一可信来源，读取用户在看板中选中的当前学习节点（selected_node），为该最小知识节点制定详细教学计划并等待用户审批。"
+description: "以 knowledge_graph.json 为唯一可信来源，读取用户在 Duonav 桌面端中选中的当前学习节点（selected_node），为该最小知识节点制定详细教学计划并等待用户审批。"
 ---
 
 # 教学计划制定技能 (Teaching Plan Skill)
 
-此技能指导 AI 以 `knowledge_graph.json` 为**唯一可信来源**，读取用户在 Web 看板（`study_Monitor/knowledge_graph.html`）中选中的当前学习节点（`selected_node`），为该单一最小知识节点制定教学计划，并等待用户审批。
+此技能指导 AI 以 `knowledge_graph.json` 为**唯一可信来源**，读取用户在 Duonav 桌面端中选中的当前学习节点（`selected_node`），为该单一最小知识节点制定教学计划，并等待用户审批。
 
 > [!IMPORTANT]
 > 本技能**只规划“讲什么”，不规划“怎么讲”**。严禁在计划阶段展开详细数学公式推导或进行正文教学。
@@ -19,14 +19,21 @@ description: "以 knowledge_graph.json 为唯一可信来源，读取用户在�
 收到制定计划指令时，智能体**必须顺序执行以下决策流**：
 
 ```pseudo
-- CALL view_file 读取 "knowledge_graph.json"
-- IF "knowledge_graph.json" 不存在:
-    - 提示用户: "未检测到知识图谱大纲，请先调用 lmi-outline-skill 生成 knowledge_graph.json"
+- CALL view_file 读取 "knowledge_graphs/active_subject.json"
+- IF "knowledge_graphs/active_subject.json" 存在:
+    - active_subject = json.active_subject
+    - graph_path = "knowledge_graphs/" + active_subject + "/knowledge_graph.json"
+- ELSE:
+    - active_subject = "默认学科"
+    - graph_path = "knowledge_graph.json"
+- CALL view_file 读取 graph_path
+- IF graph_path 文件不存在:
+    - 提示用户: "未检测到知识图谱大纲，请先调用 lmi-outline-skill 生成知识图谱"
     - STOP_CALLING_TOOLS (退出)
 - ELSE:
     - target_id = json.selected_node
     - IF (target_id == null 或 target_id == ""):
-        - 提示用户: "⚠️ 未检测到已选学的节点。请先在看板（study_Monitor/knowledge_graph.html）中点击目标节点并选择「⭐ 选择学习此节点」（看板会自动写回 JSON），或直接在对话中指定你想学习的节点 ID（例如：1.3）。"
+        - 提示用户: "⚠️ 在当前学科【" + active_subject + "】中未检测到已选学的节点。请先在 Duonav 桌面端中点击目标节点并选择「⭐ 设为当前学习节点」（桌面端会自动落盘写回 JSON），或直接在对话中指定你想学习的节点 ID（例如：1.3）。"
         - STOP_CALLING_TOOLS (退出，等待用户选择)
     - ELSE:
         - target_node = json.nodes.find(n => n.id == target_id)

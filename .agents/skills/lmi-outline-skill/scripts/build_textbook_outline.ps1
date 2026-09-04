@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     教材原版大纲校验与生成脚本：
     对子代理收集的原始教材大纲进行两级章节（章-节）格式约束校验，并规范输出 textbook_outline.json。
@@ -140,6 +140,10 @@ $finalObj = @{
 }
 
 $outFullPath = if ([System.IO.Path]::IsPathRooted($OutputFile)) { $OutputFile } else { Join-Path (Get-Location).Path $OutputFile }
+$outDir = [System.IO.Path]::GetDirectoryName($outFullPath)
+if ($outDir -and -not (Test-Path $outDir)) {
+    [System.IO.Directory]::CreateDirectory($outDir) | Out-Null
+}
 $jsonText = $finalObj | ConvertTo-Json -Depth 6
 [System.IO.File]::WriteAllText($outFullPath, $jsonText, (New-Object System.Text.UTF8Encoding $true))
 
