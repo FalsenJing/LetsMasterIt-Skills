@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-    设置/更新活动学科指针脚本：规范创建或更新 knowledge_graphs/active_subject.json。
-    【标准 JSON 输出协议】：所有执行结果均以纯 JSON 形式输出到 stdout，便于模型直接解析与自审。
+    Set/Update active subject pointer script: creates or updates knowledge_graphs/active_subject.json.
+    Standard JSON output protocol: All execution results are output to stdout as pure JSON.
 #>
 
 [CmdletBinding()]
@@ -28,14 +28,14 @@ function Output-Fail {
     exit 1
 }
 
-# 1. 检查 Subject 参数非空
+# 1. Check Subject parameter
 if ([string]::IsNullOrWhiteSpace($Subject)) {
     Output-Fail @(
         @{ type = "EMPTY_SUBJECT"; message = "Subject name cannot be empty." }
     )
 }
 
-# 2. 解析绝对路径并确保父目录存在
+# 2. Resolve absolute path and ensure directory exists
 try {
     $outFullPath = if ([System.IO.Path]::IsPathRooted($OutputFile)) {
         $OutputFile
@@ -48,7 +48,7 @@ try {
         [System.IO.Directory]::CreateDirectory($outDir) | Out-Null
     }
 
-    # 3. 构造标准化 JSON 指针对象
+    # 3. Construct JSON object
     $cleanSubject = $Subject.Trim()
     $updatedAt = (Get-Date).ToString("yyyy-MM-ddTHH:mm:sszzz")
     $pointerObj = @{
@@ -56,11 +56,11 @@ try {
         updated_at     = $updatedAt
     }
 
-    # 4. 写入文件 (标准 UTF-8 编码，无 BOM)
+    # 4. Write file (Standard UTF-8 without BOM)
     $jsonText = $pointerObj | ConvertTo-Json -Depth 3
     [System.IO.File]::WriteAllText($outFullPath, $jsonText, (New-Object System.Text.UTF8Encoding $false))
 
-    # 5. 标准 JSON 响应输出到 stdout
+    # 5. Standard JSON response to stdout
     $response = @{
         success        = $true
         action         = "set_active_subject"

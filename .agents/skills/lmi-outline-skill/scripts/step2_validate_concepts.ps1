@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-    Step 2 校验脚本：校验概念归一化结果 (concept_dictionary) 与节点回写的一致性。
-    【标准 JSON 输出协议】：所有校验结果与统计信息均以纯 JSON 形式输出到 stdout，便于模型直接解析与自审。
+    Step 2 validation script: validate concept normalization (concept_dictionary) and node reference consistency.
+    Standard JSON output protocol: All validation results and statistics are output to stdout as pure JSON.
 #>
 
 [CmdletBinding()]
@@ -159,7 +159,7 @@ for ($c = 0; $c -lt $data.concept_dictionary.Count; $c++) {
     }
 }
 
-# 校验节点回写的 teaches 和 requires
+# Validate node teaches and requires
 foreach ($n in $data.nodes) {
     $nid = $n.id
     
@@ -229,7 +229,7 @@ if ($data.PSObject.Properties.Name -contains "meta") {
 }
 
 $jsonOutput = $cleanData | ConvertTo-Json -Depth 6
-[System.IO.File]::WriteAllText($outFullPath, $jsonOutput, (New-Object System.Text.UTF8Encoding $true))
+[System.IO.File]::WriteAllText($outFullPath, $jsonOutput, (New-Object System.Text.UTF8Encoding $false))
 
 $response = @{
     success     = $true

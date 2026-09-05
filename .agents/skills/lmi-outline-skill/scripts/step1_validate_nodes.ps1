@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-    Step 1 校验脚本：规范模型输出的节点 JSON 格式与对象字段。
-    【标准 JSON 输出协议】：所有校验结果与统计信息均以纯 JSON 形式输出到 stdout，便于模型直接解析与自审。
+    Step 1 validation script: validate node JSON format and object fields.
+    Standard JSON output protocol: All validation results and statistics are output to stdout as pure JSON.
 #>
 
 [CmdletBinding()]
@@ -200,15 +200,15 @@ if ($errors.Count -gt 0) {
     Output-Fail $errors.ToArray()
 }
 
-# 输出规范后的数据文件
+# Output normalized JSON data file (UTF-8 No BOM)
 $outFullPath = if ([System.IO.Path]::IsPathRooted($OutputFile)) { $OutputFile } else { Join-Path (Get-Location).Path $OutputFile }
 $cleanData = @{
     nodes = $nodes
 }
 $jsonOutput = $cleanData | ConvertTo-Json -Depth 6
-[System.IO.File]::WriteAllText($outFullPath, $jsonOutput, (New-Object System.Text.UTF8Encoding $true))
+[System.IO.File]::WriteAllText($outFullPath, $jsonOutput, (New-Object System.Text.UTF8Encoding $false))
 
-# 标准 JSON 响应输出到 stdout
+# Standard JSON response to stdout
 $response = @{
     success     = $true
     step        = 1

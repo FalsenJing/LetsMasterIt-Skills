@@ -1,8 +1,8 @@
 <#
 .SYNOPSIS
-    教材原版大纲校验与生成脚本：
-    对子代理收集的原始教材大纲进行两级章节（章-节）格式约束校验，并规范输出 textbook_outline.json。
-    【标准 JSON 输出协议】：所有校验指标、错误均以纯 JSON 形式输出到 stdout。
+    Textbook outline validation and generation script:
+    Validates two-level chapter structure (chapter -> section) and outputs textbook_outline.json.
+    Standard JSON output protocol: All metrics and errors are output to stdout as pure JSON.
 #>
 
 [CmdletBinding()]
@@ -27,14 +27,14 @@ function Output-Fail {
     exit 1
 }
 
-# 1. 检查输入文件
+# 1. Check input file
 if (-not (Test-Path $InputFile)) {
     Output-Fail @(
         @{ type = "FILE_NOT_FOUND"; message = "Input file '$InputFile' not found." }
     )
 }
 
-# 2. 解析 JSON
+# 2. Parse JSON
 try {
     $rawContent = [System.IO.File]::ReadAllText((Resolve-Path $InputFile).Path, [System.Text.Encoding]::UTF8)
     $data = $rawContent | ConvertFrom-Json
@@ -45,11 +45,11 @@ catch {
     )
 }
 
-# 3. 校验顶层字段 (title, chapters)
+# 3. Validate top-level fields (title, chapters)
 $errors = [System.Collections.ArrayList]::new()
 
 if ($null -eq $data.title -or [string]::IsNullOrWhiteSpace($data.title)) {
-    [void]$errors.Add(@{ type = "MISSING_TITLE"; message = "Missing or empty top-level 'title' field (教材书名)." })
+    [void]$errors.Add(@{ type = "MISSING_TITLE"; message = "Missing or empty top-level 'title' field." })
 }
 
 if ($null -eq $data.chapters -or -not ($data.chapters -is [array]) -or $data.chapters.Count -eq 0) {
@@ -60,13 +60,13 @@ if ($errors.Count -gt 0) {
     Output-Fail $errors.ToArray()
 }
 
-# 4. 校验二级章节结构（严格两级约束：章 -> 节，禁止第三级子节）
+# 4. Validate two-level structure (strictly chapters -> sections, no subsections)
 $cleanChapters = [System.Collections.ArrayList]::new()
 $totalSections = 0
 
 for ($cIdx = 0; $cIdx -lt $data.chapters.Count; $cIdx++) {
     $ch = $data.chapters[$cIdx]
-    $chId = if ($ch.id) { "$($ch.id)".Trim() } else { "第$($cIdx + 1)章" }
+    $chId = if ($ch.id) { "$($ch.id)".Trim() } else { "Chapter $($cIdx + 1)" }
     $chTitle = if ($ch.title) { "$($ch.title)".Trim() } else { "" }
 
     if ([string]::IsNullOrWhiteSpace($chTitle)) {
@@ -88,7 +88,7 @@ for ($cIdx = 0; $cIdx -lt $data.chapters.Count; $cIdx++) {
             [void]$errors.Add(@{ type = "MISSING_SECTION_TITLE"; chapter_id = $chId; section_index = $sIdx; message = "Section at index $sIdx in chapter '$chId' is missing 'title'." })
         }
 
-        # 严格禁止第三级子小节 (no subsections / sub_items / children)
+        # Strictly disallow third-level subsections
         if ($sec.PSObject.Properties.Name -contains "subsections" -or $sec.PSObject.Properties.Name -contains "sub_items" -or $sec.PSObject.Properties.Name -contains "children") {
             [void]$errors.Add(@{ type = "EXCEEDED_LEVEL_LIMIT"; section_id = $secId; message = "Section '$secId' contains nested sub-items. Textbook outline must be strictly two levels (chapters -> sections)." })
         }
@@ -130,7 +130,7 @@ if ($errors.Count -gt 0) {
     Output-Fail $errors.ToArray()
 }
 
-# 5. 输出规范化文件
+# 5. Output normalized file (UTF-8 without BOM)
 $finalObj = @{
     title        = "$($data.title)".Trim()
     author       = if ($data.author) { "$($data.author)".Trim() } else { "" }
@@ -145,7 +145,7 @@ if ($outDir -and -not (Test-Path $outDir)) {
     [System.IO.Directory]::CreateDirectory($outDir) | Out-Null
 }
 $jsonText = $finalObj | ConvertTo-Json -Depth 6
-[System.IO.File]::WriteAllText($outFullPath, $jsonText, (New-Object System.Text.UTF8Encoding $true))
+[System.IO.File]::WriteAllText($outFullPath, $jsonText, (New-Object System.Text.UTF8Encoding $false))
 
 $response = @{
     success     = $true

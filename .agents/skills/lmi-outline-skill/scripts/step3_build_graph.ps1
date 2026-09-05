@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
-    Step 3 核心脚本：自动由概念依赖生成 edges、严格拓扑排序检测有向环、计算图谱指标，并组装生成 knowledge_graph.json。
-    【标准 JSON 输出协议】：所有连边指标、环检测结果均以纯 JSON 形式输出到 stdout，便于模型直接解析与自审。
+    Step 3 core script: automatically generate edges from concept dependencies, strictly detect directed cycles via topological sort, calculate graph metrics, and assemble knowledge_graph.json.
+    Standard JSON output protocol: All edge metrics and cycle detection results are output to stdout as pure JSON.
 #>
 
 [CmdletBinding()]
@@ -71,7 +71,7 @@ foreach ($c in $concepts) {
     $conceptMap[$c.id] = $c
 }
 
-# 1. 自动生成 edges
+# 1. Automatically generate edges
 $edges = [System.Collections.ArrayList]::new()
 $edgeKeySet = [System.Collections.Generic.HashSet[string]]::new()
 $edgeErrors = [System.Collections.ArrayList]::new()
@@ -109,7 +109,7 @@ foreach ($targetNode in $nodes) {
                     to          = $toId
                     type        = "prerequisite"
                     via_concept = $concept.id
-                    reason      = "「$($targetNode.label)」需要「$($concept.canonical)」的知识"
+                    reason      = "[{0}] requires [{1}]" -f $targetNode.label, $concept.canonical
                 }
                 [void]$edges.Add($edgeObj)
                 $adjList[$fromId].Add($toId)
@@ -123,7 +123,7 @@ if ($edgeErrors.Count -gt 0) {
     Output-Fail $edgeErrors.ToArray()
 }
 
-# 2. 环检测 (Kahn's Algorithm 拓扑排序)
+# 2. Cycle detection (Kahn's Algorithm topological sort)
 $queue = [System.Collections.Generic.Queue[string]]::new()
 $inDegreeCopy = [System.Collections.Generic.Dictionary[string, int]]::new()
 foreach ($k in $inDegree.Keys) {
@@ -161,7 +161,7 @@ if ($topoOrder.Count -ne $nodes.Count) {
     )
 }
 
-# 3. 动态规划计算最长链与并行度
+# 3. Dynamic programming for critical path and parallelism
 $dist = [System.Collections.Generic.Dictionary[string, int]]::new()
 $prevNode = [System.Collections.Generic.Dictionary[string, string]]::new()
 foreach ($nid in $nodes) {
@@ -197,7 +197,7 @@ $path.Reverse()
 
 $parallelism = [Math]::Round(($nodes.Count / [double]$maxDist), 2)
 
-# 4. 孤立节点检查
+# 4. Isolated nodes check
 $isolatedNodes = @()
 foreach ($n in $nodes) {
     if ($inDegree[$n.id] -eq 0 -and $adjList[$n.id].Count -eq 0) {
@@ -205,9 +205,9 @@ foreach ($n in $nodes) {
     }
 }
 
-# 5. 组装并写入 knowledge_graph.json
-$finalSubject = if ($Subject) { $Subject } elseif ($data.meta -and $data.meta.subject) { $data.meta.subject } else { "概率论与数理统计" }
-$finalRefs = if ($References.Count -gt 0) { $References } elseif ($data.meta -and $data.meta.references) { $data.meta.references } else { @("权威经典教材") }
+# 5. Assemble and write knowledge_graph.json
+$finalSubject = if ($Subject) { $Subject } elseif ($data.meta -and $data.meta.subject) { $data.meta.subject } else { "General Subject" }
+$finalRefs = if ($References.Count -gt 0) { $References } elseif ($data.meta -and $data.meta.references) { $data.meta.references } else { @("Standard Textbook") }
 
 $finalMeta = @{
     subject      = $finalSubject
@@ -239,9 +239,9 @@ if ($outDir -and -not (Test-Path $outDir)) {
     [System.IO.Directory]::CreateDirectory($outDir) | Out-Null
 }
 $finalJsonText = $finalJsonObj | ConvertTo-Json -Depth 8
-[System.IO.File]::WriteAllText($outFullPath, $finalJsonText, (New-Object System.Text.UTF8Encoding $true))
+[System.IO.File]::WriteAllText($outFullPath, $finalJsonText, (New-Object System.Text.UTF8Encoding $false))
 
-# 同步更新活动学科指针 (active_subject.json)
+# Sync active subject pointer (active_subject.json)
 $kgDir = Split-Path $outDir -Parent
 if ($outDir -and (Test-Path $kgDir)) {
     $pointerFile = Join-Path $kgDir "active_subject.json"
@@ -253,7 +253,7 @@ if ($outDir -and (Test-Path $kgDir)) {
     [System.IO.File]::WriteAllText($pointerFile, $pointerJson, (New-Object System.Text.UTF8Encoding $false))
 }
 
-# 标准 JSON 响应输出到 stdout
+# Standard JSON response to stdout
 $response = @{
     success     = $true
     step        = 3
