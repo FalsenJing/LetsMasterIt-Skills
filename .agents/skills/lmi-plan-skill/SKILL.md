@@ -1,11 +1,11 @@
 ---
 name: lmi-plan-skill
-description: "以 knowledge_graph.json 为唯一可信来源，读取用户在 Duonav 桌面端中选中的当前学习节点（selected_node），为该最小知识节点制定详细教学计划并等待用户审批。"
+description: "以 knowledge_graph.json 为唯一可信来源，读取用户在 该中选中的当前学习节点（selected_node），为该最小知识节点制定详细教学计划并等待用户审批。"
 ---
 
 # 教学计划制定技能 (Teaching Plan Skill)
 
-此技能指导 AI 以 `knowledge_graph.json` 为**唯一可信来源**，读取用户在 Duonav 桌面端中选中的当前学习节点（`selected_node`），为该单一最小知识节点制定教学计划，并等待用户审批。
+以 `knowledge_graph.json` 为**唯一可信来源**，读取该文件中的（`selected_node`），为该单一最小知识节点制定教学计划，并等待用户审批。
 
 > [!IMPORTANT]
 > 本技能**只规划“讲什么”，不规划“怎么讲”**。严禁在计划阶段展开详细数学公式推导或进行正文教学。
