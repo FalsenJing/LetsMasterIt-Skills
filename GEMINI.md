@@ -2,6 +2,7 @@
 收到用户的教学请求后、开始任何讲解或制定教学计划之前，智能体**必须**先执行[决策流]：
 
 ### [决策流] ——每次会话都执行，且是顺序执行，这是if else逻辑语句
+```pseudo
 - IF 用户发出教学请求、开始任何讲解或制定教学计划
    - THEN 执行**定位当前活动学科图谱**：调用 `view_file` 读取 `knowledge_graphs/active_subject.json` 获取当前活动学科（`active_subject = json.active_subject`，对应图谱路径为 `knowledge_graphs/<active_subject>/knowledge_graph.json`；若不存在指针文件则回退检查根目录 `knowledge_graph.json`）
       - IF 不存在有效图谱文件 
@@ -28,14 +29,14 @@
                   - ELSE 调用`lmi-execution-skill`技能，引用该节点的[x教学计划.md]
                - ELSE [退出决策流锚点]  
       - ELSE [退出决策流锚点] 
-                  
+```
 
 ---
 [退出决策流锚点]——该锚点用于提前结束决策流
 
 ### [输出路径对齐摘要]：
 1. ```
-   📍 路径对齐：[学科名称] · [知识点名称] 位于 [阶段/子模块]，是该模块的第 N/M 个节点。
+   📍 路径对齐：[学科名称] · [知识点名称] ，是该章节的第 N/M 个节点。
    前置节点状态：[已完成/未覆盖的前置节点列表]
    ```
 2. **前置依赖未覆盖时**：提示 `⚠️ 检测到前置节点 [X, Y] 尚未覆盖。建议先学习这些前置内容，或确认是否跳过。`
@@ -43,7 +44,7 @@
 ---
 
 ### 用户偏好设置
-- [x]——这是一个checkbox,用于维护是否支持调用`.agents\skills\linear-tikzdraw-skill\SKILL.md`技能，**如果为空，则禁止一切调用技能`.agents\skills\linear-tikzdraw-skill\SKILL.md`的方法。**
+- [ ]——这是一个checkbox,用于维护是否支持调用`.agents\skills\linear-tikzdraw-skill\SKILL.md`技能，**如果为空，则禁止一切调用技能`.agents\skills\linear-tikzdraw-skill\SKILL.md`的方法。**
 
 - 语言设置：使用用户输入的语言作为输出的语言（例如用户输出中文：输出简体中文，除非用户另有要求）
 
