@@ -76,8 +76,8 @@ START:
 - IF (学习目标为“解决考试 / 应试导向”):
     - THEN [异步并发指派子代理收集教材大纲] 调用 invoke_subagent，仅传入书籍名称与输出规范：
         -  invoke_subagent(
-            Role="教材大纲调研员", TypeName="research", Model="flash",
-            Prompt="书籍名称: 《<指定书籍或权威应试教材>》\n任务目标: 自行检索收集该教材原版两级目录大纲（严格约束为两级：章 -> 节，严禁包含第三级小节）。\n输出规范: 先写入 textbook_outline_raw.json，再执行 PowerShell 格式约束脚本输出到学科专属目录：\npowershell -ExecutionPolicy Bypass -File .agents/skills/lmi-outline-skill/scripts/build_textbook_outline.ps1 -InputFile textbook_outline_raw.json -OutputFile knowledge_graphs/<学科名称>/textbook_outline.json\n完成后清理 raw 临时文件并向主代理汇报完成。"
+            Role="教材大纲调研员", TypeName="self", Model="flash",
+            Prompt="书籍名称: 《<指定书籍或权威应试教材>》\n任务目标: 自行检索收集该教材原版两级目录大纲（严格约束为两级：章 ->节，严禁包含第三级小节）。\n输出规范: 先写入 textbook_outline_raw.json，再执行 PowerShell 格式约束脚本输出到学科专属目录：\npowershell -ExecutionPolicy Bypass -File .agents/skills/lmi-outline-skill/scripts/build_textbook_outline.ps1 -InputFile textbook_outline_raw.json -OutputFile knowledge_graphs/<学科名称>/textbook_outline.json\n完成后清理 raw 临时文件并向主代理汇报完成。"
           )
     - AND 不等待子代理，同时立即并发推进自身图谱任务 -> 进入 [PHASE_1]
 - ELSE IF 非应试目标（如科研/自学/工程应用等）:

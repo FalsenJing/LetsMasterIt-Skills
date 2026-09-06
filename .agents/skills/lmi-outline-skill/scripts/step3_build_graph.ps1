@@ -223,14 +223,14 @@ foreach ($n in $nodes) {
     }
 }
 
-$finalJsonObj = @{
+$finalJsonObj = [ordered]@{
     meta               = $finalMeta
-    concept_dictionary = $concepts
+    selected_node      = $null
     nodes              = $nodes
     edges              = $edges
+    concept_dictionary = $concepts
     error_log          = @()
     difficulty_log     = @()
-    selected_node      = $null
 }
 
 $outFullPath = if ([System.IO.Path]::IsPathRooted($OutputFile)) { $OutputFile } else { Join-Path (Get-Location).Path $OutputFile }

@@ -41,11 +41,13 @@
                - AND [退出决策流锚点]
             - ELSE (target_node = json.nodes.find(n => n.id == target_id))
                - 确认位置、前置节点 status 状态，[输出路径对齐摘要]。
-               - IF 当前目录下不存在`teaching_plans/` + active_subject 文件夹 或 不存在该节点的教学计划文件（如 `teaching_plans/` + active_subject + `/<target_id>*.md`）
+               - plan_dir = <工作区绝对路径> + "/teaching_plans/" + active_subject
+               - CALL find_by_name(SearchDirectory=plan_dir, Pattern=target_id + "*.md") 严格在学科专属目录下检索计划文件
+               - IF (plan_dir 目录不存在 或 检索结果为空)
                   - THEN 调用`lmi-plan-skill`技能
                   - AND 询问用户是否要开启`.agents\skills\linear-tikzdraw-skill\SKILL.md` 技能，并告知用户：“该技能为实验性技能，旨在`obsidian`中提供可视化内容，如无需要，建议保持默认禁止调用状态”。如果用户要求开启，则将[用户偏好设置]的checkbox标记为`[x]`。  
                   - AND [退出决策流锚点]  
-               - ELSE IF 存在该节点的教学计划文件 (plan_file = 匹配到的 "teaching_plans/" + active_subject + "/<target_id>*.md")
+               - ELSE (plan_file = plan_dir + "/" + 检索到的首个文件名)
                   - CALL view_file 读取 plan_file
                   - unchecked_subtopics = 提取 plan_file 中所有以 "- [ ]" 开头的子主题
                   - checked_subtopics = 提取 plan_file 中所有以 "- [x]" 开头的子主题
@@ -59,15 +61,36 @@
                      - 调用 `lmi-execution-skill` 技能，传入 plan_file 与 current_subtopic，用以定位当前教学子主题。
                      - AND [退出决策流锚点]
                   - ELSE IF (所有子主题均为 "- [x]")
-                     - IF (target_node.status != "completed")
-                        - CALL replace_file_content 更新图谱 (status="completed", mastered=true)
-                     - END IF
-                     - IF (用户要求重新学习该节点)
-                        - CALL replace_file_content 将 plan_file 中所有 "- [x]" 重置为 "- [ ]"
-                        - 提示用户: "📍 重新学习：【" + target_node.label + "】。视为全新教学请求，本次聚焦子主题 1"
-                        - 调用 `lmi-execution-skill` 技能，传入 plan_file 并聚焦子主题 1 展开全新教学
+                     - prereq_edges = json.edges.filter(e => e.to == target_id && e.type == "prerequisite")
+                     - all_prereqs_done = prereq_edges.every(pe => json.nodes.find(n => n.id == pe.from).status == "completed")
+                     - IF (all_prereqs_done)
+                        - IF (target_node.status != "completed")
+                           - target_node.status = "completed"
+                           - FOR EACH cid IN target_node.teaches:
+                              - c = json.concept_dictionary.find(x => x.id == cid)
+                              - IF (c != null) c.mastered = true
+                           - END FOR
+                           - downstream_edges = json.edges.filter(e => e.from == target_id && e.type == "prerequisite")
+                           - FOR EACH edge IN downstream_edges:
+                              - post_node = json.nodes.find(n => n.id == edge.to)
+                              - IF (post_node != null && post_node.status == "locked"):
+                                 - p_edges = json.edges.filter(e => e.to == post_node.id && e.type == "prerequisite")
+                                 - can_unlock = p_edges.every(pe => json.nodes.find(n => n.id == pe.from).status == "completed")
+                                 - IF (can_unlock) post_node.status = "available"
+                              - END IF
+                           - END FOR
+                           - json.meta.last_updated = CURRENT_ISO_TIME
+                           - CALL replace_file_content 更新图谱持久化 (status="completed", concept.mastered, 解锁后置节点, last_updated)
+                        - END IF
+                        - IF (用户要求重新学习该节点)
+                           - CALL replace_file_content 将 plan_file 中所有 "- [x]" 重置为 "- [ ]"
+                           - 提示用户: "📍 重新学习：【" + target_node.label + "】。视为全新教学请求，本次聚焦子主题 1"
+                           - 调用 `lmi-execution-skill` 技能，传入 plan_file 并聚焦子主题 1 展开全新教学
+                        - ELSE
+                           - 提示用户: "🎉 当前节点【" + target_node.label + "】已全部学完并掌握！请在 Duonav 桌面端中选中下一个解锁节点，或直接在对话中指定下一节点 ID（例如：2.2）继续学习。"
+                        - END IF
                      - ELSE
-                        - 提示用户: "🎉 当前节点【" + target_node.label + "】已全部学完并掌握！请在 Duonav 桌面端中选中下一个解锁节点，或直接在对话中指定下一节点 ID（例如：2.2）继续学习。"
+                        - 提示用户: "🎉 当前节点【" + target_node.label + "】所有子主题已学完！因前置依赖节点尚未在图谱中全部完成，暂不解锁后置节点；待前置节点全部学完后，本节点将自动认证通关。"
                      - END IF
                      - AND [退出决策流锚点]
                - ELSE [退出决策流锚点]  
@@ -78,11 +101,13 @@
 [退出决策流锚点]——该锚点用于提前结束决策流
 
 ### [输出路径对齐摘要]：
-1. ```
-   📍 路径对齐：[学科名称] · [知识点名称] ，是该章节的第 N/M 个节点。
-   前置节点状态：[已完成/未覆盖的前置节点列表]
-   ```
-2. **前置依赖未覆盖时**：提示 `⚠️ 检测到前置节点 [X, Y] 尚未覆盖。建议先学习这些前置内容，或确认是否跳过。`
+- **前置依赖已全部掌握时**：
+  ```
+  📍 路径对齐：[学科名称] · [知识点名称] ，是该章节的第 N/M 个节点。
+  前置节点状态：[已完成的前置节点列表]
+  ```
+- **前置依赖未覆盖/节点为 locked 时（跳级旁听模式）**：
+  提示 `💡 检测到节点【[知识点名称]】的前置依赖尚未全部掌握。已开启【跳级旁听模式】：本次教学将默认具备相关基础直接展开推演；为保证图谱真实性，学完后暂不点亮完成状态与解锁后置节点。`
 
 ---
 
