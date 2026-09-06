@@ -241,18 +241,6 @@ if ($outDir -and -not (Test-Path $outDir)) {
 $finalJsonText = $finalJsonObj | ConvertTo-Json -Depth 8
 [System.IO.File]::WriteAllText($outFullPath, $finalJsonText, (New-Object System.Text.UTF8Encoding $false))
 
-# Sync active subject pointer (active_subject.json)
-$kgDir = Split-Path $outDir -Parent
-if ($outDir -and (Test-Path $kgDir)) {
-    $pointerFile = Join-Path $kgDir "active_subject.json"
-    $pointerObj = @{
-        active_subject = $finalSubject
-        updated_at     = (Get-Date).ToString("yyyy-MM-ddTHH:mm:sszzz")
-    }
-    $pointerJson = $pointerObj | ConvertTo-Json -Depth 3
-    [System.IO.File]::WriteAllText($pointerFile, $pointerJson, (New-Object System.Text.UTF8Encoding $false))
-}
-
 # Standard JSON response to stdout
 $response = @{
     success     = $true

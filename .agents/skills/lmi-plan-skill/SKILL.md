@@ -56,8 +56,9 @@ START:
     - requires_concepts = []
     - FOR EACH cid IN target_node.requires:
         - concept = json.concept_dictionary.find(c => c.id == cid)
-        - edge = json.edges.find(e => e.to == target_id && e.type == "prerequisite" && e.reason != null)
-        - requires_concepts.add({ concept: concept, reason: edge.reason })
+        - edge = json.edges.find(e => e.to == target_id && e.via_concept == cid && e.type == "prerequisite")
+        - edge_reason = (edge && edge.reason) ? edge.reason : ("[" + target_node.label + "] requires [" + concept.canonical + "]")
+        - requires_concepts.add({ concept: concept, reason: edge_reason })
     - END FOR
     - references = json.meta.references
     - IF (存在 "knowledge_graphs/" + active_subject + "/textbook_outline.json"):
@@ -71,7 +72,7 @@ START:
     - 提炼各子主题下的核心定理、公理、引理或判定准则的标准学术名称 (不写具体数学公式)
 
 - [步骤 5: 产物落盘与中立交付 (Persistence & Handover)]
-    - plan_path = "teaching_plans/" + target_id + " " + target_node.label + "-计划.md"
+    - plan_path = "teaching_plans/" + active_subject + "/" + target_id + " " + target_node.label + "-计划.md"
     - CALL write_to_file 将符合标准化格式的 Markdown 写入 plan_path
     - 输出计划摘要 (包含子主题、承载概念与核心定理名) 供用户审查
     - 提示用户: "📋 教学计划（二级大纲）已生成至 " + plan_path + "。请审查大纲内容与范围边界：如需调整子主题请指出；若确认无误，可随时基于本计划启动课堂教学。"
@@ -102,12 +103,12 @@ START:
 ## 二、📋 二级大纲与核心定理清单
 *(本节共划分 N 个子主题，每个子主题支撑一轮完整的 [现实具象 ➔ 图像表征 ➔ 严谨教学] 三段式闭环)*
 
-1. **[子主题 1 学术规范名称]**
+- [ ] **1. [子主题 1 学术规范名称]**
    - **承载概念**：`[概念ID]`
    - **核心范畴**：[说明本子主题聚焦的内涵与认知跃迁目标]
    - **核心定理/准则名**：[本子主题下必须覆盖的核心公理/定理/引理/准则的纯学术名称，不写公式]
 
-2. **[子主题 2 学术规范名称]**
+- [ ] **2. [子主题 2 学术规范名称]**
    - **承载概念**：`[概念ID]`
    - **核心范畴**：[说明本子主题聚焦的内涵与认知跃迁目标]
    - **核心定理/准则名**：[纯学术名称，不写公式]

@@ -1,6 +1,6 @@
 ---
 name: lmi-execution-skill
-description: "以教学计划（teaching_plans/X.md）为唯一来源，进行教学讲解。讲解完成后更新 knowledge_graph.json（节点状态、概念掌握度、错题记录 error_log、疑难点记录 difficulty_log）。"
+description: "以教学计划（teaching_plans/<学科>/X.md）为唯一来源，进行教学讲解。讲解完成后更新 knowledge_graph.json（节点状态、概念掌握度、错题记录 error_log、疑难点记录 difficulty_log）。"
 ---
 
 # 教学实施技能 (Teaching Execution Skill)
@@ -20,7 +20,7 @@ description: "以教学计划（teaching_plans/X.md）为唯一来源，进行�
 
 ### 一、唯一可信来源锁定
 
-1. 讲解时**只能**按照教学计划（`teaching_plans/X-计划.md`）中的二级大纲与核心定理清单执行
+1. 讲解时**只能**按照教学计划（`teaching_plans/<学科>/X-计划.md`）中的二级大纲与核心定理清单执行
 2. **不得**擅自增删子主题或调整讲解顺序，每次教学只聚焦一个子主题。
 3. **确保子主题中的每一个核心定理都被完整推导与严格陈述**，讲述范畴严格约束于教学计划的范围与禁区
 4. 若讲解中发现计划遗漏了必要内容，**必须先向用户说明并获得同意后再补充**
@@ -83,14 +83,26 @@ description: "以教学计划（teaching_plans/X.md）为唯一来源，进行�
 
 ---
 
-## 绘图模块(若`GEMINI.md`文件中的`7. `checkbox为`[ ]`状态，则无视该模块)：🖼️ 子代理并行绘图 (Subagent TikZ Delegation)
+## 🖼️ 子代理并行绘图模块 (Subagent TikZ Delegation)
 
-- 每次讲解核心知识点时，主代理必须**同时**调用 `invoke_subagent` 启动一个专属绘图子代理
-- **模型要求**：将子代理的 `Model` 参数设置为 `pro`
-- **指令要求**：在 Prompt 中明确要求子代理调用并遵循 `linear-tikzdraw-skill` 技能，根据当前知识点绘制严谨的 TikZ 几何示意图
-- **职责分离**：主代理不得直接编写 TikZ 代码，100% 专注于知识点文字和公式的推导讲解
+### [绘图决策流] —— 顺序执行，这是 if else 逻辑语句
+```pseudo
+- IF (用户偏好设置中的绘图 checkbox 为 "[ ]")
+   - THEN [退出绘图模块锚点]
+- ELSE IF (用户偏好设置中的绘图 checkbox 为 "[x]")
+   - THEN 每次讲解核心知识点时，主代理必须同时调用 `invoke_subagent` 启动一个专属绘图子代理：
+      - Role: "TikZ几何绘图员"
+      - TypeName: "self"
+      - Model: "pro"
+      - Prompt: "调用并遵循 linear-tikzdraw-skill 技能，根据当前知识点绘制严谨的 TikZ 几何示意图。严格遵守 TikZJax 兼容性规范。"
+   - 职责分离：主代理不得直接编写 TikZ 代码，100% 专注于知识点文字和公式的推导讲解
+   - AND [退出绘图模块锚点]
+- END IF
+```
 
 ---
+[退出绘图模块锚点]——该锚点用于提前结束绘图决策流，直接进入下一模块
+
 
 ## 📊 进度与档案维护（维护 `knowledge_graph.json`）
 
