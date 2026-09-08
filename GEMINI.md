@@ -3,11 +3,14 @@
 
 ### [决策流] ——每次会话都执行，且是顺序执行，这是if else逻辑语句
 ```pseudo
+- WORKSPACE_ROOT = 本文件 (GEMINI.md) 所在目录的绝对路径
+
 - IF 用户发出教学请求、开始任何讲解或制定教学计划
-   - THEN 执行**定位当前活动学科图谱**：
+   - THEN 执行**学科与节点状态探测**：
+      - active_subject = ""
       - IF (用户在当前对话中显式指定了学科名称或要求切换学科，例如：“切换到线性代数”、“学人工智能数学基础”)
          - specified_subject = 提取用户指定的学科名称
-         - IF (存在有效图谱 "knowledge_graphs/" + specified_subject + "/knowledge_graph.json")
+         - IF (存在有效图谱 WORKSPACE_ROOT + "/knowledge_graphs/" + specified_subject + "/knowledge_graph.json")
             - CALL run_command 执行 `powershell -ExecutionPolicy Bypass -File .agents/skills/lmi-outline-skill/scripts/set_active_subject.ps1 -Subject "<specified_subject>"` 更新活动指针
             - active_subject = specified_subject
          - ELSE
@@ -17,84 +20,106 @@
                - AND [退出决策流锚点]
             - ELSE [退出决策流锚点]
          - END IF
-      - ELSE
-         - 调用 `view_file` 读取 `knowledge_graphs/active_subject.json` 获取当前活动学科（`active_subject = json.active_subject`，对应图谱路径为 `knowledge_graphs/<active_subject>/knowledge_graph.json`；若不存在指针文件则回退检查根目录 `knowledge_graph.json`）
       - END IF
-      - IF 不存在有效图谱文件 
-         - THEN 询问用户是否要调用`.agents\skills\lmi-outline-skill`技能
+
+      - node_arg = ""
+      - IF (用户在当前对话中显式指定了节点 ID，例如 “学 1.3” 或 “制定 2.1 计划”)
+         - target_node_id = 提取用户指定的节点 ID
+         - node_arg = "-NodeId \"" + target_node_id + "\""
+      - END IF
+
+      - subject_arg = ""
+      - IF (active_subject != "")
+         - subject_arg = "-Subject \"" + active_subject + "\""
+      - END IF
+      - CALL run_command 执行 `powershell -ExecutionPolicy Bypass -File .agents/scripts/get_knowledge_graph.ps1 <subject_arg> <node_arg>`
+      - probe = PARSE_JSON(stdout)
+
+      - IF (probe.success == false)
+         - IF (probe.error == "GRAPH_NOT_FOUND")
+            - 提示用户：“⚠️ 未检测到学科【" + probe.active_subject + "】的知识图谱。”并询问是否要调用 `.agents\skills\lmi-outline-skill` 初始化该学科
             - IF 调用该技能
-               - THEN 调用平台“拷问”工具(例如：/grill-me)与用户对齐信息，进行知识图谱大纲与活动指针的初始化**
-               - AND [退出决策流锚点]  
-            - ELSE [退出决策流锚点]  
-       - ELSE IF 存在有效图谱文件
-         - THEN 调用 `view_file` 读取该图谱，获取学习情况与各节点 status 状态（completed / available / locked）：
-            - IF (用户在当前对话中显式指定了节点 ID)
-               - target_id = 用户指定的节点 ID
-               - IF (json.selected_node != target_id)
-                  - CALL replace_file_content 更新图谱中 selected_node = target_id
+               - THEN 调用平台“拷问”工具(例如：/grill-me)与用户对齐信息，进行知识图谱大纲与活动指针的初始化
+               - AND [退出决策流锚点]
+            - ELSE [退出决策流锚点]
+         - ELSE IF (probe.error == "NO_SELECTED_NODE")
+            - 提示用户: probe.message
+            - AND [退出决策流锚点]
+         - ELSE IF (probe.error == "NODE_NOT_FOUND")
+            - 提示用户: probe.message
+            - AND [退出决策流锚点]
+         - ELSE
+            - 提示用户: probe.message
+            - AND [退出决策流锚点]
+         - END IF
+      - END IF
+
+      - active_subject = probe.active_subject
+      - target_node = probe.node
+      - target_id = probe.target_id
+      - has_plan = probe.plan.has_plan
+      - plan_file = probe.plan.plan_file
+
+      - IF (!has_plan)
+         - THEN 提示用户: "📍 路径对齐：" + target_node.position_summary + "。正在制定教学计划..."
+         - AND 调用 `lmi-plan-skill` 技能，传入 active_subject 与 target_id
+         - AND 询问用户是否要开启`.agents\skills\linear-tikzdraw-skill\SKILL.md` 技能，并告知用户：“该技能为实验性技能，旨在`obsidian`中提供可视化内容，如无需要，建议保持默认禁止调用状态”。如果用户要求开启，则将[用户偏好设置]的checkbox标记为`[x]`。
+         - AND [退出决策流锚点]
+      - ELSE IF (用户在当前对话中显式表达“重新制定计划 / 重新规划 / 修改计划 / 调整大纲”) # 特殊情况：教案已存在但用户主动要求重制或调整
+         - THEN 提示用户: "📍 重新规划：【" + target_node.label + "】。正在重新制定教学计划..."
+         - AND 调用 `lmi-plan-skill` 技能，传入 active_subject 与 target_id
+         - AND 询问用户是否要开启`.agents\skills\linear-tikzdraw-skill\SKILL.md` 技能，并告知用户：“该技能为实验性技能，旨在`obsidian`中提供可视化内容，如无需要，建议保持默认禁止调用状态”。如果用户要求开启，则将[用户偏好设置]的checkbox标记为`[x]`。
+         - AND [退出决策流锚点]
+      - ELSE
+         - CALL view_file 读取 plan_file
+         - unchecked_subtopics = 提取 plan_file 中所有以 "- [ ]" 开头的子主题
+         - checked_subtopics = 提取 plan_file 中所有以 "- [x]" 开头的子主题
+         - IF (unchecked_subtopics 数量 > 0)
+            - current_subtopic = unchecked_subtopics[0]
+            - IF (probe.prerequisites.is_locked || !probe.prerequisites.all_completed)
+               - THEN 提示用户: "💡 检测到节点【" + target_node.label + "】的前置依赖尚未全部掌握。已开启【跳级旁听模式】：本次教学将默认具备相关基础直接展开推演；为保证图谱真实性，学完后暂不点亮完成状态与解锁后置节点。"
+            - ELSE
+               - 确认位置、前置节点 status 状态，[输出路径对齐摘要]。
+            - END IF
+            - IF (checked_subtopics 数量 > 0)
+               - 提示用户: "📍 断点续学：【" + target_node.label + "】进度 (" + checked_subtopics.length + "/" + (checked_subtopics.length + unchecked_subtopics.length) + ")。本次继续推进子主题：【" + current_subtopic.title + "】"
+            - ELSE
+               - 提示用户: "📍 开始学习：【" + target_node.label + "】。本次聚焦子主题 1：【" + current_subtopic.title + "】"
+            - END IF
+            - 调用 `lmi-execution-skill` 技能，传入 plan_file 与 current_subtopic，用以定位当前教学子主题。
+            - AND [退出决策流锚点]
+         - ELSE IF (所有子主题均为 "- [x]")
+            - IF (probe.prerequisites.all_completed)
+               - IF (target_node.status != "completed")
+                  - target_node.status = "completed"
+                  - FOR EACH cid IN target_node.teaches:
+                     - c = json.concept_dictionary.find(x => x.id == cid)
+                     - IF (c != null) c.mastered = true
+                  - END FOR
+                  - downstream_edges = json.edges.filter(e => e.from == target_id && e.type == "prerequisite")
+                  - FOR EACH edge IN downstream_edges:
+                     - post_node = json.nodes.find(n => n.id == edge.to)
+                     - IF (post_node != null && post_node.status == "locked"):
+                        - p_edges = json.edges.filter(e => e.to == post_node.id && e.type == "prerequisite")
+                        - can_unlock = p_edges.every(pe => json.nodes.find(n => n.id == pe.from).status == "completed")
+                        - IF (can_unlock) post_node.status = "available"
+                     - END IF
+                  - END FOR
+                  - json.meta.last_updated = CURRENT_ISO_TIME
+                  - CALL replace_file_content 更新图谱持久化 (status="completed", concept.mastered, 解锁后置节点, last_updated)
+               - END IF
+               - IF (用户要求重新学习该节点)
+                  - CALL replace_file_content 将 plan_file 中所有 "- [x]" 重置为 "- [ ]"
+                  - 提示用户: "📍 重新学习：【" + target_node.label + "】。视为全新教学请求，本次聚焦子主题 1"
+                  - 调用 `lmi-execution-skill` 技能，传入 plan_file 并聚焦子主题 1 展开全新教学
+               - ELSE
+                  - 提示用户: "🎉 当前节点【" + target_node.label + "】已全部学完并掌握！请在 Duonav 桌面端中选中下一个解锁节点，或直接在对话中指定下一节点 ID（例如：3.4）继续学习。"
                - END IF
             - ELSE
-               - target_id = json.selected_node
+               - 提示用户: "🎉 当前节点【" + target_node.label + "】所有子主题已学完！因前置依赖节点尚未在图谱中全部完成，暂不解锁后置节点；待前置节点全部学完后，本节点将自动认证通关。"
             - END IF
-            - IF (target_id 为空或未指定)
-               - THEN 提示用户：“⚠️ 当前学科【<active_subject>】未检测到选中的学习节点。请先在 Duonav 桌面端点击目标节点并设为当前学习节点，或直接在对话中指定你想学习的节点 ID（例如：1.3）。”
-               - AND [退出决策流锚点]
-            - ELSE (target_node = json.nodes.find(n => n.id == target_id))
-               - 确认位置、前置节点 status 状态，[输出路径对齐摘要]。
-               - plan_dir = <工作区绝对路径> + "/teaching_plans/" + active_subject
-               - CALL find_by_name(SearchDirectory=plan_dir, Pattern=target_id + "*.md") 严格在学科专属目录下检索计划文件
-               - IF (plan_dir 目录不存在 或 检索结果为空)
-                  - THEN 调用`lmi-plan-skill`技能
-                  - AND 询问用户是否要开启`.agents\skills\linear-tikzdraw-skill\SKILL.md` 技能，并告知用户：“该技能为实验性技能，旨在`obsidian`中提供可视化内容，如无需要，建议保持默认禁止调用状态”。如果用户要求开启，则将[用户偏好设置]的checkbox标记为`[x]`。  
-                  - AND [退出决策流锚点]  
-               - ELSE (plan_file = plan_dir + "/" + 检索到的首个文件名)
-                  - CALL view_file 读取 plan_file
-                  - unchecked_subtopics = 提取 plan_file 中所有以 "- [ ]" 开头的子主题
-                  - checked_subtopics = 提取 plan_file 中所有以 "- [x]" 开头的子主题
-                  - IF (unchecked_subtopics 数量 > 0)
-                     - current_subtopic = unchecked_subtopics[0]
-                     - IF (checked_subtopics 数量 > 0)
-                        - 提示用户: "📍 断点续学：【" + target_node.label + "】进度 (" + checked_subtopics.length + "/" + (checked_subtopics.length + unchecked_subtopics.length) + ")。本次继续推进子主题：【" + current_subtopic.title + "】"
-                     - ELSE
-                        - 提示用户: "📍 开始学习：【" + target_node.label + "】。本次聚焦子主题 1：【" + current_subtopic.title + "】"
-                     - END IF
-                     - 调用 `lmi-execution-skill` 技能，传入 plan_file 与 current_subtopic，用以定位当前教学子主题。
-                     - AND [退出决策流锚点]
-                  - ELSE IF (所有子主题均为 "- [x]")
-                     - prereq_edges = json.edges.filter(e => e.to == target_id && e.type == "prerequisite")
-                     - all_prereqs_done = prereq_edges.every(pe => json.nodes.find(n => n.id == pe.from).status == "completed")
-                     - IF (all_prereqs_done)
-                        - IF (target_node.status != "completed")
-                           - target_node.status = "completed"
-                           - FOR EACH cid IN target_node.teaches:
-                              - c = json.concept_dictionary.find(x => x.id == cid)
-                              - IF (c != null) c.mastered = true
-                           - END FOR
-                           - downstream_edges = json.edges.filter(e => e.from == target_id && e.type == "prerequisite")
-                           - FOR EACH edge IN downstream_edges:
-                              - post_node = json.nodes.find(n => n.id == edge.to)
-                              - IF (post_node != null && post_node.status == "locked"):
-                                 - p_edges = json.edges.filter(e => e.to == post_node.id && e.type == "prerequisite")
-                                 - can_unlock = p_edges.every(pe => json.nodes.find(n => n.id == pe.from).status == "completed")
-                                 - IF (can_unlock) post_node.status = "available"
-                              - END IF
-                           - END FOR
-                           - json.meta.last_updated = CURRENT_ISO_TIME
-                           - CALL replace_file_content 更新图谱持久化 (status="completed", concept.mastered, 解锁后置节点, last_updated)
-                        - END IF
-                        - IF (用户要求重新学习该节点)
-                           - CALL replace_file_content 将 plan_file 中所有 "- [x]" 重置为 "- [ ]"
-                           - 提示用户: "📍 重新学习：【" + target_node.label + "】。视为全新教学请求，本次聚焦子主题 1"
-                           - 调用 `lmi-execution-skill` 技能，传入 plan_file 并聚焦子主题 1 展开全新教学
-                        - ELSE
-                           - 提示用户: "🎉 当前节点【" + target_node.label + "】已全部学完并掌握！请在 Duonav 桌面端中选中下一个解锁节点，或直接在对话中指定下一节点 ID（例如：2.2）继续学习。"
-                        - END IF
-                     - ELSE
-                        - 提示用户: "🎉 当前节点【" + target_node.label + "】所有子主题已学完！因前置依赖节点尚未在图谱中全部完成，暂不解锁后置节点；待前置节点全部学完后，本节点将自动认证通关。"
-                     - END IF
-                     - AND [退出决策流锚点]
-               - ELSE [退出决策流锚点]  
-      - ELSE [退出决策流锚点] 
+            - AND [退出决策流锚点]
+         - END IF
 ```
 
 ---
@@ -126,4 +151,3 @@
 ***禁止***：
 - 子代理禁止调用子代理
 - 在调用`lmi-outline-skill`时，禁止任何调用`lmi-plan-skill`和`lmi-execution-skill`技能的方法
-
