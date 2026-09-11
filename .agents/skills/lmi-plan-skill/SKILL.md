@@ -25,17 +25,17 @@ description: "运行脚本 get_node_info.ps1 获取制定输出产物`教学计�
 | :------------------------------------ | :------- | :---------------------------------------- | :------------------------------------------------------------- |
 | `success`                             | boolean  | 脚本执行状态                                    | 若为 `false`，直接向用户展示 `message` 报错并终止，提示在客户端选择节点                  |
 | `action`                              | string   | 操作动作标识 (`"get_node_info"`)                | 验证接口协议版本与来源                                                    |
-| `active_subject`                      | string   | 当前活动学科名称 (如 `"线性代数"`)                     | 用于输出路径对齐摘要，确认当前教案所属学科环境                                        |
-| `selected_node_id`                    | string   | 选中的目标节点 ID (如 `"3.2"`)                    | 用于构建教案一级标题及子主题编号依据                                             |
+| `active_subject`                      | string   | 当前活动学科名称                   | 用于输出路径对齐摘要，确认当前教案所属学科环境                                        |
+| `selected_node_id`                    | string   | 选中的目标节点 ID                 | 用于构建教案一级标题及子主题编号依据                                             |
 | `persisted_update`                    | boolean  | 图谱选中状态是否发生持久化更新                           | 若为 `true`，表明用户通过参数显式切换了节点并已持久化                                 |
-| `suggested_plan_path`                 | string   | 标准化教案存储相对路径                               | `write_to_file` 写入的目标路径（如 `teaching_plans/线性代数/3.2 xxx-计划.md`） |
+| `suggested_plan_path`                 | string   | 标准化教案存储相对路径                               | `write_to_file` 写入的目标路径 |
 | `node.id`                             | string   | 节点唯一编号                                    | 写入教案标题 `# 教学计划：[node.id] [node.label]`                         |
 | `node.label`                          | string   | 节点标准学术名称                                  | 写入教案标题及确认核心推演范畴                                                |
 | `node.safe_label`                     | string   | 文件名安全字符的节点名称                              | 供路径与文档锚点安全使用（已过滤非法特殊字符）                                        |
 | `node.module`                         | string   | 节点所属章节/模块名称                               | 写入教案 `## 一、🎯 概念目标与教学边界` 中的 `- **所属模块**`                       |
-| `node.position_summary`               | string   | 格式化后的学科与章节进度摘要                            | 在会话交互中输出路径对齐信息，例如 `【线性代数】·【xxx】, 【xxx】(2/5)`                   |
+| `node.position_summary`               | string   | 格式化后的学科与章节进度摘要                            | 在会话交互中输出路径对齐信息                  |
 | `teaches_concepts`                    | object[] | 本节点负责传授的核心概念列表 (完备性契约)                    | 写入教案 `## 一、` 的 `**本节教授概念 (Teaches)**`；**二级大纲必须 100% 覆盖吸收**     |
-| `teaches_concepts[].id`               | string   | 概念唯一标识符 (如 `matrix_multiplication_views`) | 二级大纲各子主题条目中的 `- **承载概念**` 声明，供课堂执行追踪                           |
+| `teaches_concepts[].id`               | string   | 概念唯一标识符 | 二级大纲各子主题条目中的 `- **承载概念**` 声明，供课堂执行追踪                           |
 | `teaches_concepts[].canonical`        | string   | 概念的标准学术中文名                                | 用于二级大纲子主题提炼、学术命名与核心定理关联                                        |
 | `teaches_concepts[].aliases`          | string[] | 概念别名与英文对照                                 | 在教案概念清单中使用括号标注，丰富术语上下文                                         |
 | `requires_concepts`                   | object[] | 本节点的前置依赖概念及溯源                             | 写入教案 `## 一、` 的 `**前置依赖概念 (Requires)**`                         |
