@@ -18,6 +18,12 @@ param(
     [Alias("r")]
     [switch]$Replan,
 
+    [Alias("nm")]
+    [switch]$NonMath,
+
+    [Alias("st")]
+    [string]$SubjectType,
+
     [Alias("o")]
     [string]$OutputFile
 )
@@ -258,6 +264,78 @@ $nodePayload = [ordered]@{
     module_total     = $moduleNodes.Count
     status           = "$($targetNode.status)"
     position_summary = $positionSummary
+}
+
+# ===================================================================
+# Stage 3.5: Subject Type Resolution & General Teaching Direct Bypass
+# ===================================================================
+$resolvedType = "math"
+if ($NonMath.IsPresent) {
+    $resolvedType = "general"
+} elseif (-not [string]::IsNullOrWhiteSpace($SubjectType)) {
+    $resolvedType = $SubjectType.Trim().ToLower()
+} elseif ($graph.meta -and $graph.meta.subject_type) {
+    $resolvedType = "$($graph.meta.subject_type)".Trim().ToLower()
+} elseif ($graph.meta -and $graph.meta.is_math -ne $null) {
+    $resolvedType = if ($graph.meta.is_math) { "math" } else { "general" }
+} else {
+    $mathPattern = '代数|微积分|高数|高等数学|线性代数|概率|统计|几何|数论|实变函数|复变函数|常微分方程|偏微分方程|人工智能数学|离散数学|运筹学|数学'
+    if ($activeSubject -notmatch $mathPattern) {
+        $resolvedType = "general"
+    }
+}
+
+if ($resolvedType -eq "general" -or $resolvedType -eq "non_math" -or $resolvedType -eq "non-math") {
+    $conceptMap = [System.Collections.Generic.Dictionary[string, psobject]]::new()
+    if ($graph.concept_dictionary) {
+        foreach ($c in $graph.concept_dictionary) {
+            if (-not [string]::IsNullOrWhiteSpace("$($c.id)")) {
+                $conceptMap["$($c.id)".Trim()] = $c
+            }
+        }
+    }
+
+    $teachesResolved = [System.Collections.ArrayList]::new()
+    if ($targetNode.teaches) {
+        foreach ($cid in $targetNode.teaches) {
+            $cidStr = "$cid".Trim()
+            $cObj = if ($conceptMap.ContainsKey($cidStr)) { $conceptMap[$cidStr] } else { $null }
+            [void]$teachesResolved.Add([ordered]@{
+                id        = $cidStr
+                canonical = if ($cObj) { $cObj.canonical } else { $cidStr }
+                aliases   = if ($cObj -and $cObj.aliases) { @($cObj.aliases) } else { @() }
+            })
+        }
+    }
+
+    $requiresResolved = [System.Collections.ArrayList]::new()
+    if ($targetNode.requires) {
+        foreach ($cid in $targetNode.requires) {
+            $cidStr = "$cid".Trim()
+            $cObj = if ($conceptMap.ContainsKey($cidStr)) { $conceptMap[$cidStr] } else { $null }
+            [void]$requiresResolved.Add([ordered]@{
+                id        = $cidStr
+                canonical = if ($cObj) { $cObj.canonical } else { $cidStr }
+                aliases   = if ($cObj -and $cObj.aliases) { @($cObj.aliases) } else { @() }
+            })
+        }
+    }
+
+    $displayMsg = if ($isJumpingMode) {
+        "💡 【通用教学模式】检测到节点【$($targetNode.label)】的前置依赖尚未全部掌握。已开启【跳级旁听模式】：本次教学将直接展开知识讲解；学完后暂不点亮完成状态与解锁后置节点。"
+    } else {
+        "📍 路径对齐：$positionSummary。当前学科【$activeSubject】采用通用教学模式，无需制定教案与公式推演，正在直接展开知识点讲解..."
+    }
+
+    Send-Verdict -Action "ROUTE_TO_GENERAL_TEACHING" -Payload @{
+        active_subject    = $activeSubject
+        subject_type      = "general"
+        target_node       = $nodePayload
+        is_jumping_mode   = $isJumpingMode
+        teaches_concepts  = $teachesResolved.ToArray()
+        requires_concepts = $requiresResolved.ToArray()
+        display_message   = $displayMsg
+    }
 }
 
 # Branch 4A: Plan does not exist OR user requested Replan -> ROUTE_TO_PLAN

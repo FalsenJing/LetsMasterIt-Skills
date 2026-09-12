@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Step 3 core script: automatically generate edges from concept dependencies, strictly detect directed cycles via topological sort, calculate graph metrics, and assemble knowledge_graph.json.
     Standard JSON output protocol: All edge metrics and cycle detection results are output to stdout as pure JSON.
@@ -13,6 +13,9 @@ param(
     [string]$OutputFile = "knowledge_graph.json",
 
     [string]$Subject = "",
+
+    [Alias("st")]
+    [string]$SubjectType = "",
 
     [string[]]$References = @()
 )
@@ -209,8 +212,20 @@ foreach ($n in $nodes) {
 $finalSubject = if ($Subject) { $Subject } elseif ($data.meta -and $data.meta.subject) { $data.meta.subject } else { "General Subject" }
 $finalRefs = if ($References.Count -gt 0) { $References } elseif ($data.meta -and $data.meta.references) { $data.meta.references } else { @("Standard Textbook") }
 
-$finalMeta = @{
+$mathPattern = '代数|微积分|高数|高等数学|线性代数|概率|统计|几何|数论|实变函数|复变函数|常微分方程|偏微分方程|人工智能数学|离散数学|运筹学|数学'
+$inferredType = if ($SubjectType) {
+    $SubjectType.Trim().ToLower()
+} elseif ($data.meta -and $data.meta.subject_type) {
+    "$($data.meta.subject_type)".Trim().ToLower()
+} elseif ($finalSubject -match $mathPattern) {
+    "math"
+} else {
+    "general"
+}
+
+$finalMeta = [ordered]@{
     subject      = $finalSubject
+    subject_type = $inferredType
     version      = "2.0"
     last_updated = (Get-Date).ToString("yyyy-MM-ddTHH:mm:sszzz")
     references   = $finalRefs

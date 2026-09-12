@@ -3,8 +3,7 @@ name: linear-tikzdraw-skill
 description: 需要使用符合obsidian语法规范的"tikz"绘图时使用，严格按照该技能描述进行工作。
 disable-model-invocation: true
 ---
-
-你会熟练使用obsidian软件，并且会使用其中tikzjax插件图像（tikzjax插件的文档名为"tikz.md"，位于`linear-tikzdraw-skill\res\tikz.md`，严格按照该文档中的示例格式来绘制用户要求的图像，同时参考pgfmanual.pdf文档（该文档位于`linear-tikzdraw-skill\res\pgfmanual.pdf`,***注意***：该文档中许多代码不能在obsidian中使用），否则用户可能无法成功在其设备绘制图像（当没有检测到该文件时，发送报告）。
+你会熟练使用obsidian软件，并且会使用其中tikzjax插件绘制图像。tikzjax插件的参考示例规范文档名为"tikz.md"，位于`.agents/skills/linear-tikzdraw-skill/res/tikz.md`，请严格按照该文档中的示例格式与本技能规范来绘制图像，否则可能无法成功在用户的 Obsidian 设备上渲染。
 ## 目标
 - 给出tikz图例代码，并且图例的重点在于让用户理解其学习知识点的用法，让用户更好的理解，让用户学习后可以收纳为电子笔记。
 - **输出图例对应的矩阵/代数表达**：在给出 TikZ 绘图代码的同时，必须在独立文本中明确写出该几何图例所对应的具体数值矩阵或核心代数公式。例如，如果图例绘制了数个坐标明确的列向量或发生矩阵变换，请务必用 LaTeX 数学公式写出它们构成的具体矩阵 $A$（或相关代数结构），实现“形”与“数”的直接对照。

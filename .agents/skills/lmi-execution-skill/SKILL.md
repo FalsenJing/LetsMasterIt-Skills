@@ -5,7 +5,7 @@ description: "以教学计划（teaching_plans/<学科>/X.md）为大纲来源�
 
 # 教学实施技能 (Teaching Execution Skill)
 
-此技能以用户提供的教学计划（`teaching_plans/<学科>/X-计划.md`）为**教学大纲唯一依据**，以当前学科知识图谱（`knowledge_graphs/<学科>/knowledge_graph.json`）中全局概念词典（`concept_dictionary`）的 **`mastered`（布尔值）** 字段为**用户概念掌握状态的唯一权威数据源**。严格按照[核心职责]进行教学讲解，在讲解完成后进入[课后结算决策流]。
+此技能以调度网关传入的活动学科（`active_subject`）、目标节点编号（`target_id`）与教学计划文件（`plan_file`，格式如 `teaching_plans/<学科>/X-计划.md`）为基础输入，以教学计划为**教学大纲唯一依据**，以当前学科知识图谱（`knowledge_graphs/<学科>/knowledge_graph.json`）中全局概念词典（`concept_dictionary`）的 **`mastered`（布尔值）** 字段为**用户概念掌握状态的唯一权威数据源**。严格按照[核心职责]进行教学讲解，在讲解完成后进入[课后结算决策流]。
 
 ---
 
@@ -111,50 +111,19 @@ description: "以教学计划（teaching_plans/<学科>/X.md）为大纲来源�
 
 ### [课后结算决策流] —— 顺序执行，这是 if else 逻辑语句
 ```pseudo
-- CALL replace_file_content 将 plan_file 中当前子主题的待办标记从 "- [ ]" 更新为 "- [x]" (落盘持久化)
-- IF (用户在练习中答错或解析存在概念混淆)
-   - THEN 向 knowledge_graph.json 的 error_log 追加错题记录 (status: "pending_review")
-- END IF
-- IF (用户对当前概念反复困惑)
-   - THEN 向 knowledge_graph.json 的 difficulty_log 追加疑难点记录 (status: "confused")
-- END IF
-- CALL view_file 重新读取 plan_file 检查所有子主题标记
-- unchecked_count = plan_file 中以 "- [ ]" 开头的子主题数量
-- checked_count = plan_file 中以 "- [x]" 开头的子主题数量
-- total_count = unchecked_count + checked_count
-- IF (unchecked_count > 0)
-   - THEN 提示用户: "✅ 子主题【" + current_subtopic.title + "】已掌握并销项！当前节点学习进度 (" + checked_count + "/" + total_count + ")。回复【继续】推进下一子主题，或针对本节提出疑问深入探讨。"
-   - AND [退出结算锚点]
-- ELSE IF (unchecked_count == 0)
-   - CALL view_file 读取当前学科图谱 knowledge_graphs/<active_subject>/knowledge_graph.json
-   - target_node = nodes.find(n => n.id == target_id)
-   - IF (target_node.status == "available")
-      - 将 target_node.status 从 "available" 更新为 "completed"
-      - FOR EACH cid IN target_node.teaches:
-         - concept = concept_dictionary.find(c => c.id == cid)
-         - IF (concept != null) concept.mastered = true
-      - END FOR
-      - downstream_edges = edges.filter(e => e.from == target_id && e.type == "prerequisite")
-      - newly_unlocked_nodes = []
-      - FOR EACH edge IN downstream_edges:
-         - post_node = nodes.find(n => n.id == edge.to)
-         - IF (post_node != null && post_node.status == "locked"):
-            - prereq_edges = edges.filter(e => e.to == post_node.id && e.type == "prerequisite")
-            - all_prereqs_done = prereq_edges.every(pe => nodes.find(n => n.id == pe.from).status == "completed")
-            - IF (all_prereqs_done):
-               - post_node.status = "available"
-               - newly_unlocked_nodes.add(post_node)
-            - END IF
-         - END IF
-      - END FOR
-      - meta.last_updated = CURRENT_ISO_TIME
-      - CALL replace_file_content 将更新写回 knowledge_graphs/<active_subject>/knowledge_graph.json
-      - 提示用户: "🎉 恭喜！当前节点【" + target_node.label + "】已全部学完并掌握！\n" + (newly_unlocked_nodes.length > 0 ? "🔓 已成功解锁后续节点：【" + newly_unlocked_nodes.map(n => n.label).join("、") + "】\n" : "") + "请在 Duonav 舵手桌面端中选中下一节点，或直接在对话中指定下一节点 ID 继续学习。"
-   - ELSE IF (target_node.status == "locked")
-      - 提示用户: "🎉 当前节点【" + target_node.label + "】已完成全部子主题推演！由于该节点的前置依赖尚未在图谱中补齐，图谱暂不点亮完成状态与解锁后续；待您后续补齐前置节点后，本节点将自动认证通关！"
-   - END IF
+- err_arg = (用户在练习中答错或解析存在概念混淆) ? ("-ErrorJson '" + 格式化错题JSON + "'") : ""
+- diff_arg = (用户对当前概念反复困惑) ? ("-DifficultyJson '" + 格式化疑难点JSON + "'") : ""
+
+- CALL run_command 执行 `powershell -ExecutionPolicy Bypass -File .agents/skills/lmi-execution-skill/scripts/settle_lesson.ps1 -Subject "<active_subject>" -NodeId "<target_id>" -PlanFile "<plan_file>" -SubtopicIndex <当前子主题序号> <err_arg> <diff_arg>`
+- verdict = PARSE_JSON(stdout)
+
+- IF (verdict.success == false):
+   - 提示用户: "⚠️ 课后结算出现异常: " + verdict.message
    - AND [退出结算锚点]
 - END IF
+
+- 提示用户: verdict.display_message
+- AND [退出结算锚点]
 ```
 
 ---

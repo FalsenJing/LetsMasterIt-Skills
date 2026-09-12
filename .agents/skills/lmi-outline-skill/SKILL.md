@@ -139,11 +139,14 @@ START:
         - 图谱拓扑验证无误，确认生成 "knowledge_graphs/<学科名称>/knowledge_graph.json"
         - [活动学科指针规范创建]:
           RUN `powershell -ExecutionPolicy Bypass -File .agents/skills/lmi-outline-skill/scripts/set_active_subject.ps1 -Subject "<学科名称>"`
-        - RUN `powershell -ExecutionPolicy Bypass -Command "Remove-Item 'step1_nodes_raw.json', 'step1_nodes.json', 'step2_concepts_raw.json', 'step2_concepts.json' -ErrorAction SilentlyContinue"`
-        - IF (存在 "knowledge_graphs/<学科名称>/textbook_outline.json"):
-            - 读取 "knowledge_graphs/<学科名称>/textbook_outline.json" 与 "knowledge_graphs/<学科名称>/knowledge_graph.json"
-            - 为每个二级子章节匹配赋标 concepts 概念标签
-            - 写回带概念标签的 "knowledge_graphs/<学科名称>/textbook_outline.json"
+        - RUN `powershell -ExecutionPolicy Bypass -Command "Remove-Item 'step1_nodes_raw.json', 'step1_nodes.json', 'step2_concepts_raw.json', 'step2_concepts.json', 'knowledge_graphs/<学科名称>/tmp/*' -Recurse -Force -ErrorAction SilentlyContinue"`
+        - IF (学习目标为应试导向):
+            - 等待子代理发送完成消息或使用 Test-Path 校验 "knowledge_graphs/<学科名称>/textbook_outline.json" 就绪
+            - IF (存在 "knowledge_graphs/<学科名称>/textbook_outline.json"):
+                - 读取 "knowledge_graphs/<学科名称>/textbook_outline.json" 与 "knowledge_graphs/<学科名称>/knowledge_graph.json"
+                - 为每个二级子章节匹配赋标 concepts 概念标签
+                - 写回带概念标签的 "knowledge_graphs/<学科名称>/textbook_outline.json"
+            - END IF
         - END IF
         - BREAK WHILE -> [进入 PHASE_4]
     - ELSE:

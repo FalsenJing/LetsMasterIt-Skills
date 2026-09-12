@@ -75,7 +75,9 @@ description: "运行脚本 get_node_info.ps1 获取制定输出产物`教学计�
 ```pseudo
 START:
 - [步骤 1: 运行教案上下文探针 (Context Extraction)]
-    - RUN `powershell -ExecutionPolicy Bypass -File .agents/skills/lmi-plan-skill/scripts/get_node_info.ps1`
+    - subject_arg = (已传入 active_subject 且非空) ? ("-Subject \"" + active_subject + "\"") : ""
+    - node_arg = (已传入 target_node_id 且非空) ? ("-NodeId \"" + target_node_id + "\"") : ""
+    - RUN `powershell -ExecutionPolicy Bypass -File .agents/skills/lmi-plan-skill/scripts/get_node_info.ps1 <subject_arg> <node_arg>`
     - context = PARSE_JSON(stdout)
     - IF (context.success == false):
         - 提示用户: context.message
