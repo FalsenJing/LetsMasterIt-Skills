@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Step 3 core script: automatically generate edges from concept dependencies, strictly detect directed cycles via topological sort, calculate graph metrics, and assemble knowledge_graph.json.
     Standard JSON output protocol: All edge metrics and cycle detection results are output to stdout as pure JSON.
@@ -160,6 +160,7 @@ if ($topoOrder.Count -ne $nodes.Count) {
             type        = "CYCLE_DETECTED"
             cycle_nodes = $cycleNodes
             message     = "Cycle detected in knowledge graph. Topological sort failed. Involving nodes: $($cycleNodes -join ', ')."
+            suggestion  = "In '$InputFile', locate cycle nodes [$($cycleNodes -join ', ')]: check their requires concept lists and remove the prerequisite concept that forms the backward loop."
         }
     )
 }

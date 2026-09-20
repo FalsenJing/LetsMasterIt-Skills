@@ -29,7 +29,11 @@ function Output-Fail {
 
 if (-not (Test-Path $InputFile)) {
     Output-Fail @(
-        @{ type = "FILE_NOT_FOUND"; message = "Input file '$InputFile' not found." }
+        @{
+            type       = "FILE_NOT_FOUND"
+            message    = "Input file '$InputFile' not found."
+            suggestion = "Ensure the step 2 draft file '$InputFile' is generated before running this validation script."
+        }
     )
 }
 
@@ -39,7 +43,11 @@ try {
 }
 catch {
     Output-Fail @(
-        @{ type = "JSON_SYNTAX_ERROR"; message = "Failed to parse JSON: $($_.Exception.Message)" }
+        @{
+            type       = "JSON_SYNTAX_ERROR"
+            message    = "Failed to parse JSON: $($_.Exception.Message)"
+            suggestion = "Check JSON syntax in '$InputFile': ensure valid double quotes for keys and strings, remove trailing commas, and match braces."
+        }
     )
 }
 
@@ -47,16 +55,18 @@ $errors = [System.Collections.ArrayList]::new()
 
 if ($null -eq $data.concept_dictionary -or $data.concept_dictionary -isnot [array]) {
     [void]$errors.Add(@{
-        type = "MISSING_FIELD"
-        field = "concept_dictionary"
-        message = "Missing or invalid 'concept_dictionary' (must be an array)."
+        type       = "MISSING_FIELD"
+        field      = "concept_dictionary"
+        message    = "Missing or invalid 'concept_dictionary' (must be an array)."
+        suggestion = "In '$InputFile', add top-level 'concept_dictionary' array containing normalized concept objects."
     })
 }
 if ($null -eq $data.nodes -or $data.nodes -isnot [array]) {
     [void]$errors.Add(@{
-        type = "MISSING_FIELD"
-        field = "nodes"
-        message = "Missing or invalid 'nodes' (must be an array)."
+        type       = "MISSING_FIELD"
+        field      = "nodes"
+        message    = "Missing or invalid 'nodes' (must be an array)."
+        suggestion = "In '$InputFile', add top-level 'nodes' array containing node objects updated with concept IDs."
     })
 }
 
@@ -81,9 +91,10 @@ for ($c = 0; $c -lt $data.concept_dictionary.Count; $c++) {
 
     if ($null -eq $item -or $item -is [array]) {
         [void]$errors.Add(@{
-            type = "INVALID_CONCEPT_OBJECT"
-            index = $idx
-            message = "Concept item at index $idx is not a valid JSON object."
+            type       = "INVALID_CONCEPT_OBJECT"
+            index      = $idx
+            message    = "Concept item at index $idx is not a valid JSON object."
+            suggestion = "In '$InputFile', fix item at index $idx in 'concept_dictionary' to be a valid JSON object { ... }."
         })
         continue
     }
@@ -91,17 +102,19 @@ for ($c = 0; $c -lt $data.concept_dictionary.Count; $c++) {
     $cid = $item.id
     if ([string]::IsNullOrWhiteSpace($cid)) {
         [void]$errors.Add(@{
-            type = "MISSING_FIELD"
-            index = $idx
-            field = "id"
-            message = "Concept item at index $idx is missing 'id'."
+            type       = "MISSING_FIELD"
+            index      = $idx
+            field      = "id"
+            message    = "Concept item at index $idx is missing 'id'."
+            suggestion = "In '$InputFile', add unique 'id' field (e.g. 'C001') to concept object at index $idx in 'concept_dictionary'."
         })
     } else {
         if ($conceptMap.ContainsKey($cid)) {
             [void]$errors.Add(@{
-                type = "DUPLICATE_CONCEPT_ID"
+                type       = "DUPLICATE_CONCEPT_ID"
                 concept_id = $cid
-                message = "Duplicate concept ID '$cid'."
+                message    = "Duplicate concept ID '$cid'."
+                suggestion = "In '$InputFile', assign a unique concept ID to duplicate concept '$cid' in 'concept_dictionary'."
             })
         } else {
             $conceptMap[$cid] = $item
@@ -111,18 +124,20 @@ for ($c = 0; $c -lt $data.concept_dictionary.Count; $c++) {
     $canonical = $item.canonical
     if ([string]::IsNullOrWhiteSpace($canonical)) {
         [void]$errors.Add(@{
-            type = "MISSING_FIELD"
+            type       = "MISSING_FIELD"
             concept_id = $cid
-            field = "canonical"
-            message = "Concept '$cid' is missing or has empty 'canonical'."
+            field      = "canonical"
+            message    = "Concept '$cid' is missing or has empty 'canonical'."
+            suggestion = "In '$InputFile', add non-empty 'canonical' field for standard academic name to concept '$cid'."
         })
     } else {
         if ($canonicalSet.Contains($canonical)) {
             [void]$errors.Add(@{
-                type = "DUPLICATE_CANONICAL_NAME"
+                type       = "DUPLICATE_CANONICAL_NAME"
                 concept_id = $cid
-                canonical = $canonical
-                message = "Duplicate canonical concept name '$canonical'. Must be merged into one concept with aliases."
+                canonical  = $canonical
+                message    = "Duplicate canonical concept name '$canonical'. Must be merged into one concept with aliases."
+                suggestion = "In '$InputFile', merge duplicate concept '$canonical': keep first entry, append aliases, delete duplicates, and update node references."
             })
         } else {
             [void]$canonicalSet.Add($canonical)
@@ -132,26 +147,29 @@ for ($c = 0; $c -lt $data.concept_dictionary.Count; $c++) {
     $taughtBy = $item.taught_by
     if ([string]::IsNullOrWhiteSpace($taughtBy)) {
         [void]$errors.Add(@{
-            type = "MISSING_FIELD"
+            type       = "MISSING_FIELD"
             concept_id = $cid
-            field = "taught_by"
-            message = "Concept '$cid' ($canonical) is missing 'taught_by'."
+            field      = "taught_by"
+            message    = "Concept '$cid' ($canonical) is missing 'taught_by'."
+            suggestion = "In '$InputFile', add non-empty 'taught_by' field specifying the teaching node ID to concept '$cid'."
         })
     } elseif (-not $nodeMap.ContainsKey($taughtBy)) {
         [void]$errors.Add(@{
-            type = "INVALID_TAUGHT_BY_NODE"
+            type       = "INVALID_TAUGHT_BY_NODE"
             concept_id = $cid
-            taught_by = $taughtBy
-            message = "Concept '$cid' references non-existent node '$taughtBy' in 'taught_by'."
+            taught_by  = $taughtBy
+            message    = "Concept '$cid' references non-existent node '$taughtBy' in 'taught_by'."
+            suggestion = "In '$InputFile', update 'taught_by' field of concept '$cid' to reference an existing node ID in 'nodes'."
         })
     }
 
     if ($item.PSObject.Properties.Name -contains "aliases") {
         if ($item.aliases -isnot [array]) {
             [void]$errors.Add(@{
-                type = "INVALID_ALIASES"
+                type       = "INVALID_ALIASES"
                 concept_id = $cid
-                message = "Concept '$cid' aliases must be an array."
+                message    = "Concept '$cid' aliases must be an array."
+                suggestion = "In '$InputFile', ensure 'aliases' field of concept '$cid' is an array of strings (use [] if none)."
             })
         } else {
             $totalAliases += $item.aliases.Count
@@ -167,20 +185,22 @@ foreach ($n in $data.nodes) {
         foreach ($cid in $n.teaches) {
             if (-not $conceptMap.ContainsKey("$cid")) {
                 [void]$errors.Add(@{
-                    type = "UNRESOLVED_TEACHES_CONCEPT"
-                    node_id = $nid
+                    type       = "UNRESOLVED_TEACHES_CONCEPT"
+                    node_id    = $nid
                     concept_id = "$cid"
-                    message = "Node '$nid' teaches concept '$cid' which is not defined in concept_dictionary."
+                    message    = "Node '$nid' teaches concept '$cid' which is not defined in concept_dictionary."
+                    suggestion = "In '$InputFile', check concept '$cid': fix spelling if mistaken, or add it to 'concept_dictionary' with taught_by='$nid'."
                 })
             } else {
                 $conceptObj = $conceptMap["$cid"]
                 if ($conceptObj.taught_by -ne $nid) {
                     [void]$errors.Add(@{
-                        type = "TAUGHT_BY_MISMATCH"
-                        node_id = $nid
-                        concept_id = "$cid"
+                        type              = "TAUGHT_BY_MISMATCH"
+                        node_id           = $nid
+                        concept_id        = "$cid"
                         concept_taught_by = $conceptObj.taught_by
-                        message = "Node '$nid' claims to teach '$cid', but concept_dictionary specifies taught_by='$($conceptObj.taught_by)'."
+                        message           = "Node '$nid' claims to teach '$cid', but concept_dictionary specifies taught_by='$($conceptObj.taught_by)'."
+                        suggestion        = "In '$InputFile', resolve mismatch: either update 'taught_by' of concept '$cid' to '$nid', or remove '$cid' from 'teaches' of node '$nid'."
                     })
                 }
             }
@@ -191,18 +211,20 @@ foreach ($n in $data.nodes) {
         foreach ($cid in $n.requires) {
             if (-not $conceptMap.ContainsKey("$cid")) {
                 [void]$errors.Add(@{
-                    type = "UNRESOLVED_REQUIRES_CONCEPT"
-                    node_id = $nid
+                    type       = "UNRESOLVED_REQUIRES_CONCEPT"
+                    node_id    = $nid
                     concept_id = "$cid"
-                    message = "Node '$nid' requires concept '$cid' which is not defined in concept_dictionary."
+                    message    = "Node '$nid' requires concept '$cid' which is not defined in concept_dictionary."
+                    suggestion = "In '$InputFile', check prerequisite concept '$cid' for node '$nid': fix spelling, or register this concept in 'concept_dictionary' with its source node."
                 })
             }
             if ($n.teaches -contains "$cid") {
                 [void]$errors.Add(@{
-                    type = "SELF_DEPENDENCY"
-                    node_id = $nid
+                    type       = "SELF_DEPENDENCY"
+                    node_id    = $nid
                     concept_id = "$cid"
-                    message = "Node '$nid' cannot both teach and require concept '$cid' (self-dependency)."
+                    message    = "Node '$nid' cannot both teach and require concept '$cid' (self-dependency)."
+                    suggestion = "In '$InputFile', remove concept '$cid' from 'requires' of node '$nid' (a node cannot require a concept it teaches)."
                 })
             }
         }

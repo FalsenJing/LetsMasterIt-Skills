@@ -29,7 +29,11 @@ function Output-Fail {
 
 if (-not (Test-Path $InputFile)) {
     Output-Fail @(
-        @{ type = "FILE_NOT_FOUND"; message = "Input file '$InputFile' not found." }
+        @{
+            type       = "FILE_NOT_FOUND"
+            message    = "Input file '$InputFile' not found."
+            suggestion = "Ensure the draft file '$InputFile' is created in the working directory before running this validation script."
+        }
     )
 }
 
@@ -39,7 +43,11 @@ try {
 }
 catch {
     Output-Fail @(
-        @{ type = "JSON_SYNTAX_ERROR"; message = "Failed to parse JSON: $($_.Exception.Message)" }
+        @{
+            type       = "JSON_SYNTAX_ERROR"
+            message    = "Failed to parse JSON: $($_.Exception.Message)"
+            suggestion = "Check JSON syntax in '$InputFile': ensure valid double quotes for keys and strings, remove trailing commas, and match braces."
+        }
     )
 }
 
@@ -50,13 +58,21 @@ if ($data -is [array]) {
     $nodes = $data.nodes
 } else {
     Output-Fail @(
-        @{ type = "STRUCTURE_ERROR"; message = "Top-level JSON must be an array of nodes or an object with a 'nodes' array." }
+        @{
+            type       = "STRUCTURE_ERROR"
+            message    = "Top-level JSON must be an array of nodes or an object with a 'nodes' array."
+            suggestion = "In '$InputFile', format the root structure as an object containing a 'nodes' array: { 'nodes': [ ... ] }."
+        }
     )
 }
 
 if ($nodes.Count -eq 0) {
     Output-Fail @(
-        @{ type = "EMPTY_NODES"; message = "Nodes array is empty." }
+        @{
+            type       = "EMPTY_NODES"
+            message    = "Nodes array is empty."
+            suggestion = "In '$InputFile', add at least one valid node object to the 'nodes' array."
+        }
     )
 }
 
@@ -72,9 +88,10 @@ for ($i = 0; $i -lt $nodes.Count; $i++) {
 
     if ($null -eq $node -or $node -is [array]) {
         [void]$errors.Add(@{
-            type = "INVALID_NODE_OBJECT"
-            index = $idx
-            message = "Node at index $idx is not a valid JSON object."
+            type       = "INVALID_NODE_OBJECT"
+            index      = $idx
+            message    = "Node at index $idx is not a valid JSON object."
+            suggestion = "In '$InputFile', fix item at index $idx to be a valid JSON object { ... }."
         })
         continue
     }
@@ -83,26 +100,29 @@ for ($i = 0; $i -lt $nodes.Count; $i++) {
     $id = $node.id
     if ([string]::IsNullOrWhiteSpace($id)) {
         [void]$errors.Add(@{
-            type = "MISSING_FIELD"
-            index = $idx
-            field = "id"
-            message = "Node at index $idx is missing required field 'id'."
+            type       = "MISSING_FIELD"
+            index      = $idx
+            field      = "id"
+            message    = "Node at index $idx is missing required field 'id'."
+            suggestion = "In '$InputFile', add an 'id' field matching dot-separated hierarchy format (e.g. '1.1', '2.3') to node at index $idx."
         })
     } else {
         if (-not ($id -match '^\d+(\.\d+)+$')) {
             [void]$errors.Add(@{
-                type = "INVALID_ID_FORMAT"
-                node_id = $id
-                field = "id"
-                message = "Node ID '$id' does not match required format (e.g. '1.1', '2.3')."
+                type       = "INVALID_ID_FORMAT"
+                node_id    = $id
+                field      = "id"
+                message    = "Node ID '$id' does not match required format (e.g. '1.1', '2.3')."
+                suggestion = "In '$InputFile', change node '$id' 'id' field to match dot-separated hierarchy format (e.g. '1.1', '2.3'). Do not use Chinese or letters."
             })
         }
         if ($idSet.Contains($id)) {
             [void]$errors.Add(@{
-                type = "DUPLICATE_ID"
-                node_id = $id
-                field = "id"
-                message = "Duplicate node ID '$id'."
+                type       = "DUPLICATE_ID"
+                node_id    = $id
+                field      = "id"
+                message    = "Duplicate node ID '$id'."
+                suggestion = "In '$InputFile', assign a globally unique hierarchy ID to duplicate node '$id'."
             })
         } else {
             [void]$idSet.Add($id)
@@ -112,47 +132,52 @@ for ($i = 0; $i -lt $nodes.Count; $i++) {
     # 2. label
     if ([string]::IsNullOrWhiteSpace($node.label)) {
         [void]$errors.Add(@{
-            type = "MISSING_FIELD"
-            node_id = $id
-            field = "label"
-            message = "Node '$id' is missing or has empty 'label'."
+            type       = "MISSING_FIELD"
+            node_id    = $id
+            field      = "label"
+            message    = "Node '$id' is missing or has empty 'label'."
+            suggestion = "In '$InputFile', add a non-empty 'label' field describing the academic concept name to node '$id'."
         })
     }
 
     # 3. module
     if ([string]::IsNullOrWhiteSpace($node.module)) {
         [void]$errors.Add(@{
-            type = "MISSING_FIELD"
-            node_id = $id
-            field = "module"
-            message = "Node '$id' is missing or has empty 'module'."
+            type       = "MISSING_FIELD"
+            node_id    = $id
+            field      = "module"
+            message    = "Node '$id' is missing or has empty 'module'."
+            suggestion = "In '$InputFile', add a non-empty 'module' field describing chapter/module name to node '$id'."
         })
     }
 
     # 4. teaches
     if ($node.PSObject.Properties.Name -notcontains "teaches" -or $node.teaches -isnot [array]) {
         [void]$errors.Add(@{
-            type = "INVALID_TEACHES"
-            node_id = $id
-            field = "teaches"
-            message = "Node '$id' 'teaches' must be a non-empty array of concept strings."
+            type       = "INVALID_TEACHES"
+            node_id    = $id
+            field      = "teaches"
+            message    = "Node '$id' 'teaches' must be a non-empty array of concept strings."
+            suggestion = "In '$InputFile', define 'teaches' as an array of strings with at least 1 concept for node '$id'."
         })
     } elseif ($node.teaches.Count -eq 0) {
         [void]$errors.Add(@{
-            type = "EMPTY_TEACHES"
-            node_id = $id
-            field = "teaches"
-            message = "Node '$id' 'teaches' array is empty. Every node must teach at least 1 concept."
+            type       = "EMPTY_TEACHES"
+            node_id    = $id
+            field      = "teaches"
+            message    = "Node '$id' 'teaches' array is empty. Every node must teach at least 1 concept."
+            suggestion = "In '$InputFile', add at least 1 concept string to the 'teaches' array of node '$id'."
         })
     } else {
         $totalTeaches += $node.teaches.Count
         foreach ($t in $node.teaches) {
             if ([string]::IsNullOrWhiteSpace("$t")) {
                 [void]$errors.Add(@{
-                    type = "EMPTY_TEACHES_ITEM"
-                    node_id = $id
-                    field = "teaches"
-                    message = "Node '$id' contains an empty concept string in 'teaches'."
+                    type       = "EMPTY_TEACHES_ITEM"
+                    node_id    = $id
+                    field      = "teaches"
+                    message    = "Node '$id' contains an empty concept string in 'teaches'."
+                    suggestion = "In '$InputFile', remove empty items or provide valid concept strings in 'teaches' for node '$id'."
                 })
             }
         }
@@ -161,10 +186,11 @@ for ($i = 0; $i -lt $nodes.Count; $i++) {
     # 5. requires
     if ($node.PSObject.Properties.Name -notcontains "requires" -or $node.requires -isnot [array]) {
         [void]$errors.Add(@{
-            type = "INVALID_REQUIRES"
-            node_id = $id
-            field = "requires"
-            message = "Node '$id' 'requires' must be an array (use [] if no prerequisites)."
+            type       = "INVALID_REQUIRES"
+            node_id    = $id
+            field      = "requires"
+            message    = "Node '$id' 'requires' must be an array (use [] if no prerequisites)."
+            suggestion = "In '$InputFile', define 'requires' as an array of strings for node '$id' (use [] if no prerequisites)."
         })
     } else {
         $totalRequires += $node.requires.Count
@@ -174,20 +200,22 @@ for ($i = 0; $i -lt $nodes.Count; $i++) {
     if ($node.PSObject.Properties.Name -contains "blackbox_terms" -and $null -ne $node.blackbox_terms) {
         if ($node.blackbox_terms -isnot [array]) {
             [void]$errors.Add(@{
-                type = "INVALID_BLACKBOX_TERMS"
-                node_id = $id
-                field = "blackbox_terms"
-                message = "Node '$id' 'blackbox_terms' must be an array."
+                type       = "INVALID_BLACKBOX_TERMS"
+                node_id    = $id
+                field      = "blackbox_terms"
+                message    = "Node '$id' 'blackbox_terms' must be an array."
+                suggestion = "In '$InputFile', define 'blackbox_terms' as an array for node '$id' (use [] if no blackbox terms)."
             })
         } else {
             for ($b = 0; $b -lt $node.blackbox_terms.Count; $b++) {
                 $bt = $node.blackbox_terms[$b]
                 if ([string]::IsNullOrWhiteSpace($bt.term) -or [string]::IsNullOrWhiteSpace($bt.purpose)) {
                     [void]$errors.Add(@{
-                        type = "INVALID_BLACKBOX_ITEM"
-                        node_id = $id
-                        index = ($b + 1)
-                        message = "Node '$id' blackbox_terms at index $($b+1) must contain non-empty 'term' and 'purpose'."
+                        type       = "INVALID_BLACKBOX_ITEM"
+                        node_id    = $id
+                        index      = ($b + 1)
+                        message    = "Node '$id' blackbox_terms at index $($b+1) must contain non-empty 'term' and 'purpose'."
+                        suggestion = "In '$InputFile', provide non-empty 'term' and 'purpose' strings for blackbox_terms item at index $($b+1) in node '$id'."
                     })
                 }
             }
